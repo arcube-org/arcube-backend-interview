@@ -32,6 +32,46 @@ export interface AuditInfo {
   errorMessage?: string;
 }
 
+// Enhanced request payload types
+export interface OrderIdentifier {
+  pnr: string;
+  email?: string; // For customer requests
+}
+
+export interface RequestedBy {
+  userId: string;
+  userRole: 'admin' | 'customer_service' | 'system' | 'customer' | 'partner';
+}
+
+export interface CancelOrderRequest {
+  orderIdentifier: OrderIdentifier;
+  productId?: string; // Optional: if not provided, cancel entire order
+  requestSource: 'customer_app' | 'admin_panel' | 'partner_api' | 'system';
+  reason?: string;
+  requestedBy: RequestedBy;
+}
+
+// Authentication types
+export interface AuthContext {
+  type: 'jwt' | 'api_key' | 'service_token';
+  userId?: string;
+  userRole?: string;
+  partnerId?: string;
+  permissions: string[];
+  requestSource: 'customer_app' | 'admin_panel' | 'partner_api' | 'system';
+}
+
+// Enhanced cancellation context
+export interface EnhancedCancellationContext {
+  orderId: string;
+  productId?: string; // Optional for full order cancellation
+  reason: string;
+  requestedBy: string;
+  requestSource: 'customer_app' | 'admin_panel' | 'partner_api' | 'system';
+  correlationId: string;
+  authContext: AuthContext;
+}
+
 // DragonPass API specific types
 export interface DragonPassCancellationRequest {
   booking_id: string;
@@ -77,4 +117,12 @@ export interface CommandExecutionOptions {
   maxRetries?: number;
   retryDelay?: number;
   timeout?: number;
+}
+
+// Order lookup result
+export interface OrderLookupResult {
+  order: any;
+  product?: any;
+  canAccess: boolean;
+  accessReason?: string;
 } 

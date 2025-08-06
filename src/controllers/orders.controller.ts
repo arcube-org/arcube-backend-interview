@@ -1,51 +1,47 @@
 import { NextFunction, Request, Response } from 'express';
-import * as orderService from '../services/orders.service';
-import { ApiResponse, CancelOrderRequest, CancelOrderResponse } from '../types';
+import { CancellationService } from '../services/cancellation/cancellation.service';
+import { CancelOrderRequest } from '../types/cancellation.types';
+import { ApiResponse } from '../types';
+import { CancelOrderRequestSchema } from '../validations/cancel-order.validation';
+
+const cancellationService = new CancellationService();
 
 export const cancelOrder = async (
-  req: Request<{}, ApiResponse<CancelOrderResponse>, CancelOrderRequest>,
-  res: Response<ApiResponse<CancelOrderResponse>>,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const { orderId, reason } = req.body;
-    
-    if (!orderId) {
-      res.status(400).json({ 
-        success: false, 
-        error: 'orderId required' 
-      });
-      return;
-    }
-
-    const result = await orderService.cancel(orderId, reason);
-    res.json({ 
-      success: true, 
-      data: result 
-    });
-  } catch (e) {
-    next(e);
-  }
-};
-
-export const cancelProduct = async (
-  req: Request<{ orderId: string; productId: string }, ApiResponse<any>, { reason?: string }>,
+  req: Request<{}, ApiResponse<any>, any>,
   res: Response<ApiResponse<any>>,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { orderId, productId } = req.params;
-    const { reason } = req.body;
+    // Validate request body using Zod
+    const validationResult = CancelOrderRequestSchema.safeParse(req.body);
     
-    if (!orderId || !productId) {
-      res.status(400).json({ 
-        success: false, 
-        error: 'orderId and productId are required' 
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map((err: any) => ({
+        field: err.path.join('.'),
+        message: err.message
+      }));
+      
+      res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        data: { validationErrors: errors }
       });
       return;
     }
 
-    const result = await orderService.cancelProduct(orderId, productId, reason);
+    const payload = validationResult.data as CancelOrderRequest;
+    const authContext = req.authContext;
+
+    if (!authContext) {
+      res.status(401).json({ 
+        success: false, 
+        error: 'Authentication required' 
+      });
+      return;
+    }
+
+    const result = await cancellationService.cancelOrder(payload, authContext);
+    
     res.json({ 
       success: true, 
       data: result 
@@ -61,7 +57,7 @@ export const getCancellationAuditTrail = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const auditTrail = orderService.getCancellationAuditTrail();
+    const auditTrail = cancellationService.getAuditTrail();
     res.json({ 
       success: true, 
       data: auditTrail 
@@ -87,7 +83,7 @@ export const getCancellationAuditTrailByCorrelationId = async (
       return;
     }
 
-    const auditTrail = orderService.getCancellationAuditTrailByCorrelationId(correlationId);
+    const auditTrail = cancellationService.getAuditTrailByCorrelationId(correlationId);
     res.json({ 
       success: true, 
       data: auditTrail 

@@ -1,138 +1,312 @@
 import { v4 as uuidv4 } from 'uuid';
 import { CancellationCommandFactory } from '../../commands/cancellation/factory/cancellation-command-factory';
 import { CancellationCommandInvoker } from '../../commands/cancellation/invoker/cancellation-command-invoker';
-import { CancellationContext, CancellationResult } from '../../types/cancellation.types';
+import { 
+  CancellationResult, 
+  CancelOrderRequest, 
+  EnhancedCancellationContext 
+} from '../../types/cancellation.types';
+import { AuthContext } from '../../types/auth.types';
 import { CancellationRepository } from '../../repositories/cancellation.repository';
 import { OrderRepository } from '../../repositories/order.repository';
-import { ProductModel, ProductDocument } from '../../models';
-import { OrderModel, OrderDocument } from '../../models';
+import { OrderLookupService } from '../order-lookup.service';
+import { ProductModel, OrderModel } from '../../models';
 
 export class CancellationService {
   private commandInvoker: CancellationCommandInvoker;
   private cancellationRepository: CancellationRepository;
   private orderRepository: OrderRepository;
+  private orderLookupService: OrderLookupService;
 
   constructor() {
     this.commandInvoker = new CancellationCommandInvoker();
     this.cancellationRepository = new CancellationRepository();
     this.orderRepository = new OrderRepository();
+    this.orderLookupService = new OrderLookupService();
   }
 
   /**
-   * Cancel a product in an order
+   * Cancel order or product using enhanced request format
    */
-  async cancelProduct(
-    orderId: string,
-    productId: string,
-    reason: string,
-    requestedBy: string,
-    requestSource: 'customer' | 'admin' | 'system' = 'customer'
-  ): Promise<CancellationResult> {
+  async cancelOrder(
+    payload: CancelOrderRequest,
+    authContext: AuthContext
+  ): Promise<CancellationResult | CancellationResult[]> {
     try {
-      // 1. Validate order and product
-      const { order, product } = await this.validateOrderAndProduct(orderId, productId);
-
-      // 2. Create cancellation context
-      const context: CancellationContext = {
-        orderId,
-        productId,
-        reason,
-        requestedBy,
-        requestSource,
-        correlationId: uuidv4()
-      };
-
-      // 3. Create cancellation record
-      const cancellationRecord = await this.cancellationRepository.createCancellationRequest({
-        orderId,
-        productId,
-        reason,
-        requestSource,
-        requestedBy,
-        refundAmount: 0, // Will be updated after command execution
-        cancellationFee: 0, // Will be updated after command execution
-        currency: product.price.currency,
-        status: 'pending',
-        correlationId: context.correlationId,
-        cancelledAt: new Date()
-      });
-
-      // 4. Create and execute command
-      const command = CancellationCommandFactory.createCommand(product.provider, context);
-      const result = await this.commandInvoker.executeCommand(command);
-
-      // 5. Update cancellation record with result
-      await this.cancellationRepository.updateCancellationStatus(
-        cancellationRecord.id,
-        result.success ? 'completed' : 'failed',
-        {
-          provider: product.provider,
-          response: result.externalResponse,
-          timestamp: new Date()
-        }
-      );
-
-      // 6. Update product and order status if successful
-      if (result.success) {
-        await this.updateProductAndOrderStatus(order, product, result);
+      // 1. Lookup order and validate access
+      const lookupResult = await this.orderLookupService.lookupOrder(payload, authContext);
+      
+      if (!lookupResult.canAccess) {
+        return {
+          success: false,
+          refundAmount: 0,
+          cancellationFee: 0,
+          currency: 'USD',
+          status: 'failed',
+          message: lookupResult.accessReason || 'Access denied',
+          errorCode: 'ACCESS_DENIED'
+        };
       }
 
-      return result;
+      if (!lookupResult.order) {
+        return {
+          success: false,
+          refundAmount: 0,
+          cancellationFee: 0,
+          currency: 'USD',
+          status: 'failed',
+          message: 'Order not found',
+          errorCode: 'ORDER_NOT_FOUND'
+        };
+      }
+
+      // 2. Validate order status
+      const orderStatusValidation = this.orderLookupService.validateOrderStatus(lookupResult.order);
+      if (!orderStatusValidation.canCancel) {
+        return {
+          success: false,
+          refundAmount: 0,
+          cancellationFee: 0,
+          currency: 'USD',
+          status: 'failed',
+          message: orderStatusValidation.reason || 'Order cannot be cancelled',
+          errorCode: 'ORDER_STATUS_INVALID'
+        };
+      }
+
+      // 3. Determine cancellation type (single product vs entire order)
+      if (payload.productId) {
+        // Single product cancellation
+        return await this.cancelSingleProduct(payload, lookupResult, authContext);
+      } else {
+        // Entire order cancellation
+        return await this.cancelEntireOrder(payload, lookupResult, authContext);
+      }
 
     } catch (error) {
-      console.error('Cancellation service error:', error);
+      console.error('Enhanced cancellation service error:', error);
       return this.handleServiceError(error);
     }
   }
 
   /**
-   * Cancel an entire order
+   * Cancel a single product in an order
    */
-  async cancelOrder(
-    orderId: string,
-    reason: string,
-    requestedBy: string,
-    requestSource: 'customer' | 'admin' | 'system' = 'customer'
+  private async cancelSingleProduct(
+    payload: CancelOrderRequest,
+    lookupResult: any,
+    authContext: AuthContext
+  ): Promise<CancellationResult> {
+    const { order, product } = lookupResult;
+
+    if (!product) {
+      return {
+        success: false,
+        refundAmount: 0,
+        cancellationFee: 0,
+        currency: 'USD',
+        status: 'failed',
+        message: 'Product not found in order',
+        errorCode: 'PRODUCT_NOT_FOUND'
+      };
+    }
+
+    // Validate product status
+    const productStatusValidation = this.orderLookupService.validateProductStatus(product);
+    if (!productStatusValidation.canCancel) {
+      return {
+        success: false,
+        refundAmount: 0,
+        cancellationFee: 0,
+        currency: 'USD',
+        status: 'failed',
+        message: productStatusValidation.reason || 'Product cannot be cancelled',
+        errorCode: 'PRODUCT_STATUS_INVALID'
+      };
+    }
+
+    // Create enhanced cancellation context
+    const context: EnhancedCancellationContext = {
+      orderId: order.id,
+      productId: product.id,
+      reason: payload.reason || 'No reason provided',
+      requestedBy: payload.requestedBy.userId,
+      requestSource: payload.requestSource,
+      correlationId: uuidv4(),
+      authContext
+    };
+
+    // Execute cancellation
+    return await this.executeCancellation(context, product);
+  }
+
+  /**
+   * Cancel entire order (all products)
+   */
+  private async cancelEntireOrder(
+    payload: CancelOrderRequest,
+    lookupResult: any,
+    authContext: AuthContext
   ): Promise<CancellationResult[]> {
-    try {
-      // 1. Get order with products
-      const order = await this.orderRepository.findById(orderId);
-      if (!order) {
-        throw new Error(`Order not found: ${orderId}`);
-      }
+    const { order } = lookupResult;
 
-      const results: CancellationResult[] = [];
+    // Get all products in the order
+    const products = await this.orderLookupService.getOrderProducts(order.id);
+    
+    if (products.length === 0) {
+      return [{
+        success: false,
+        refundAmount: 0,
+        cancellationFee: 0,
+        currency: 'USD',
+        status: 'failed',
+        message: 'No products found in order',
+        errorCode: 'NO_PRODUCTS_FOUND'
+      }];
+    }
 
-      // 2. Cancel each product in the order
-      for (const productId of order.products) {
-        try {
-          const result = await this.cancelProduct(
-            orderId,
-            productId,
-            reason,
-            requestedBy,
-            requestSource
-          );
-          results.push(result);
-        } catch (error) {
-          console.error(`Failed to cancel product ${productId}:`, error);
+    const results: CancellationResult[] = [];
+
+    // Cancel each product in the order
+    for (const product of products) {
+      try {
+        // Validate product status
+        const productStatusValidation = this.orderLookupService.validateProductStatus(product);
+        if (!productStatusValidation.canCancel) {
           results.push({
             success: false,
             refundAmount: 0,
             cancellationFee: 0,
-            currency: 'USD',
+            currency: product.price?.currency || 'USD',
             status: 'failed',
-            message: `Failed to cancel product: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            errorCode: 'PRODUCT_CANCELLATION_FAILED'
+            message: productStatusValidation.reason || 'Product cannot be cancelled',
+            errorCode: 'PRODUCT_STATUS_INVALID'
           });
+          continue;
         }
+
+        // Create enhanced cancellation context
+        const context: EnhancedCancellationContext = {
+          orderId: order.id,
+          productId: product.id,
+          reason: payload.reason || 'No reason provided',
+          requestedBy: payload.requestedBy.userId,
+          requestSource: payload.requestSource,
+          correlationId: uuidv4(),
+          authContext
+        };
+
+        // Execute cancellation for this product
+        const result = await this.executeCancellation(context, product);
+        results.push(result);
+
+      } catch (error) {
+        console.error(`Failed to cancel product ${product.id}:`, error);
+        results.push({
+          success: false,
+          refundAmount: 0,
+          cancellationFee: 0,
+          currency: product.price?.currency || 'USD',
+          status: 'failed',
+          message: `Failed to cancel product: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          errorCode: 'PRODUCT_CANCELLATION_FAILED'
+        });
       }
+    }
 
-      return results;
+    return results;
+  }
 
-    } catch (error) {
-      console.error('Order cancellation error:', error);
-      return [this.handleServiceError(error)];
+  /**
+   * Execute cancellation for a single product
+   */
+  private async executeCancellation(
+    context: EnhancedCancellationContext,
+    product: any
+  ): Promise<CancellationResult> {
+    // 1. Create cancellation record
+    const cancellationRecord = await this.cancellationRepository.createCancellationRequest({
+      orderId: context.orderId,
+      productId: context.productId!,
+      reason: context.reason,
+      requestSource: context.requestSource === 'customer_app' ? 'customer' : 
+                    context.requestSource === 'admin_panel' ? 'admin' : 'system',
+      requestedBy: context.requestedBy,
+      refundAmount: 0, // Will be updated after command execution
+      cancellationFee: 0, // Will be updated after command execution
+      currency: product.price.currency,
+      status: 'pending',
+      correlationId: context.correlationId,
+      cancelledAt: new Date()
+    });
+
+    // 2. Create and execute command
+    const command = CancellationCommandFactory.createCommand(product.provider, {
+      orderId: context.orderId,
+      productId: context.productId!,
+      reason: context.reason,
+      requestedBy: context.requestedBy,
+      requestSource: context.requestSource === 'customer_app' ? 'customer' : 
+                    context.requestSource === 'admin_panel' ? 'admin' : 'system',
+      correlationId: context.correlationId
+    });
+
+    const result = await this.commandInvoker.executeCommand(command);
+
+    // 3. Update cancellation record with result
+    await this.cancellationRepository.updateCancellationStatus(
+      cancellationRecord.id,
+      result.success ? 'completed' : 'failed',
+      {
+        provider: product.provider,
+        response: result.externalResponse,
+        timestamp: new Date()
+      }
+    );
+
+    // 4. Update product and order status if successful
+    if (result.success) {
+      await this.updateProductAndOrderStatus(context.orderId, product, result);
+    }
+
+    return result;
+  }
+
+  /**
+   * Update product and order status after successful cancellation
+   */
+  private async updateProductAndOrderStatus(
+    orderId: string,
+    product: any,
+    result: CancellationResult
+  ): Promise<void> {
+    // Update product status
+    await ProductModel.findOneAndUpdate(
+      { id: product.id },
+      { 
+        status: result.status === 'completed' ? 'cancelled' : 'refunded',
+        updatedAt: new Date()
+      }
+    );
+
+    // Check if all products in order are cancelled
+    const order = await this.orderRepository.findById(orderId);
+    if (order) {
+      const allProducts = await this.orderLookupService.getOrderProducts(orderId);
+      const allCancelled = allProducts.every(p => 
+        p.status === 'cancelled' || p.status === 'refunded'
+      );
+
+      if (allCancelled) {
+        // Update order status
+        await OrderModel.findOneAndUpdate(
+          { id: orderId },
+          { 
+            status: 'cancelled',
+            updatedAt: new Date()
+          }
+        );
+      }
     }
   }
 
@@ -155,73 +329,6 @@ export class CancellationService {
    */
   async retryFailedCancellations(): Promise<CancellationResult[]> {
     return await this.commandInvoker.retryFailedCommands();
-  }
-
-  /**
-   * Validate order and product
-   */
-  private async validateOrderAndProduct(orderId: string, productId: string): Promise<{
-    order: OrderDocument;
-    product: ProductDocument;
-  }> {
-    // Validate order
-    const order = await this.orderRepository.findById(orderId);
-    if (!order) {
-      throw new Error(`Order not found: ${orderId}`);
-    }
-
-    // Check if product is in the order
-    if (!order.products.includes(productId)) {
-      throw new Error(`Product ${productId} is not part of order ${orderId}`);
-    }
-
-    // Validate product
-    const product = await ProductModel.findOne({ id: productId });
-    if (!product) {
-      throw new Error(`Product not found: ${productId}`);
-    }
-
-    // Check if product can be cancelled
-    if (!product.cancellationPolicy.canCancel) {
-      throw new Error(`Product ${productId} cannot be cancelled: ${product.cancellationPolicy.cancelCondition}`);
-    }
-
-    return { order, product };
-  }
-
-  /**
-   * Update product and order status after successful cancellation
-   */
-  private async updateProductAndOrderStatus(
-    order: OrderDocument,
-    product: ProductDocument,
-    result: CancellationResult
-  ): Promise<void> {
-    // Update product status
-    await ProductModel.findOneAndUpdate(
-      { id: product.id },
-      { 
-        status: result.status === 'completed' ? 'cancelled' : 'refunded',
-        updatedAt: new Date()
-      }
-    );
-
-    // Check if all products in order are cancelled
-    const allProducts = await ProductModel.find({ id: { $in: order.products } });
-    const allCancelled = allProducts.every(p => 
-      p.status === 'cancelled' || p.status === 'refunded'
-    );
-
-    if (allCancelled) {
-      // Update order status
-      await OrderModel.findOneAndUpdate(
-        { id: order.id },
-        { 
-          status: 'cancelled',
-          updatedAt: new Date()
-        }
-      );
-    }
   }
 
   /**

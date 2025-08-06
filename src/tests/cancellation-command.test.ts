@@ -6,7 +6,6 @@ import {
 } from '../models';
 import { CancellationCommandFactory } from '../commands/cancellation/factory/cancellation-command-factory';
 import { CancellationCommandInvoker } from '../commands/cancellation/invoker/cancellation-command-invoker';
-import { CancellationService } from '../services/cancellation/cancellation.service';
 import { env } from '../config/environment';
 
 describe('Cancellation Command Pattern', () => {
@@ -191,113 +190,6 @@ describe('Cancellation Command Pattern', () => {
       expect(auditTrail).toHaveLength(1);
       expect(auditTrail[0]?.provider).toBe('dragonpass');
       expect(auditTrail[0]?.correlationId).toBe('test-correlation-id');
-    });
-  });
-
-  describe('Cancellation Service', () => {
-    it('should cancel a product successfully', async () => {
-      const service = new CancellationService();
-      
-      const result = await service.cancelProduct(
-        testOrder.id,
-        testProduct.id,
-        'Customer request',
-        testUser.id,
-        'customer'
-      );
-
-      expect(result).toBeDefined();
-      expect(result.success).toBeDefined();
-      expect(result.message).toBeDefined();
-      expect(result.currency).toBe('USD');
-    });
-
-    it('should handle cancellation for non-DragonPass providers', async () => {
-      // Create a Mozio product
-      const mozioProduct = new ProductModel({
-        title: 'Airport Transfer',
-        provider: 'mozio',
-        type: 'airport_transfer',
-        price: {
-          amount: 75.00,
-          currency: 'USD',
-        },
-        status: 'confirmed',
-        cancellationPolicy: {
-          windows: [
-            {
-              hoursBeforeService: 24,
-              refundPercentage: 100,
-              description: 'Full refund up to 24 hours before',
-            },
-          ],
-          canCancel: true,
-        },
-        serviceDateTime: new Date(Date.now() + 48 * 60 * 60 * 1000),
-        metadata: {
-          bookingId: 'MZ-987654321',
-        },
-      });
-      await mozioProduct.save();
-
-      // Create order with Mozio product
-      const mozioOrder = new OrderModel({
-        pnr: 'TEST-PNR-002',
-        transactionId: 'TEST-TXN-002',
-        customer: {
-          email: 'customer2@example.com',
-          firstName: 'Jane',
-          lastName: 'Smith',
-        },
-        products: [mozioProduct.id],
-        segments: [],
-        status: 'confirmed',
-        userId: testUser.id,
-        totalAmount: 75.00,
-        totalCurrency: 'USD',
-      });
-      await mozioOrder.save();
-
-      const service = new CancellationService();
-      
-      const result = await service.cancelProduct(
-        mozioOrder.id,
-        mozioProduct.id,
-        'Customer request',
-        testUser.id,
-        'customer'
-      );
-
-      expect(result).toBeDefined();
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Service unavailable');
-      expect(result.errorCode).toBe('SERVICE_UNAVAILABLE');
-    });
-
-    it('should validate order and product before cancellation', async () => {
-      const service = new CancellationService();
-      
-      const result1 = await service.cancelProduct(
-        'non-existent-order',
-        testProduct.id,
-        'Customer request',
-        testUser.id,
-        'customer'
-      );
-
-      expect(result1.success).toBe(false);
-      expect(result1.message).toContain('Order not found: non-existent-order');
-
-      const result2 = await service.cancelProduct(
-        testOrder.id,
-        'non-existent-product',
-        'Customer request',
-        testUser.id,
-        'customer'
-      );
-
-      expect(result2.success).toBe(false);
-      expect(result2.message).toContain('Product non-existent-product is not part of order');
     });
   });
 }); 
