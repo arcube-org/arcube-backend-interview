@@ -12,6 +12,12 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:models": "jest src/tests/models.test.ts",
+    "test:cancellation": "jest src/tests/cancellation.test.ts",
+    "test:webhook": "jest src/tests/webhook.test.ts",
+    "test:zod-validation": "jest src/tests/zod-validation.test.ts",
+    "test:rate-limiter": "jest src/tests/rate-limiter.test.ts",
+    "test:security": "jest src/tests/security.test.ts",
+    "test:health": "jest src/tests/health.test.ts",
     "test:seed": "jest src/tests/seed.test.ts",
     "seed": "ts-node src/scripts/seed.ts",
     "webhook": "ts-node src/utils/webhook-cli.ts"

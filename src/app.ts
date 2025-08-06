@@ -5,6 +5,7 @@ import { db } from "./config/database";
 import { helmetConfig, corsConfig, bodyParserConfig } from "./config/security.config";
 import ordersRouter from "./routes/orders.route";
 import webhookRouter from "./routes/webhook.route";
+import healthRouter from "./routes/health.route";
 import { seedDatabase, checkSeedStatus } from "./utils/seed-database";
 
 const app: Application = express();
@@ -49,16 +50,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Routes
 app.use("/orders", ordersRouter);
 app.use("/webhooks", webhookRouter);
-
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
+app.use("/health", healthRouter);
 
 // 404 handler - using a specific path instead of wildcard to avoid path-to-regexp error
 app.use('/404', (req: Request, res: Response) => {
