@@ -6,6 +6,7 @@ import {
 } from '../models';
 import { CancellationService } from '../services/cancellation/cancellation.service';
 import { MultiTierAuthMiddleware } from '../middleware/auth/multi-tier-auth.middleware';
+import { AuthService } from '../services/auth.service';
 import { CancelOrderRequest } from '../types/cancellation.types';
 import { AuthContext } from '../types/auth.types';
 import { env } from '../config/environment';
@@ -36,7 +37,6 @@ describe('Enhanced Cancellation System', () => {
   });
 
   beforeEach(async () => {
-    // Clean up database
     const collections = mongoose.connection.collections;
     for (const key in collections) {
       const collection = collections[key];
@@ -45,16 +45,15 @@ describe('Enhanced Cancellation System', () => {
       }
     }
 
-    // Create test user
     testUser = new UserModel({
       name: 'Test User',
       email: 'test@example.com',
+      password: 'TestPassword123',
       role: 'user',
       isActive: true,
     });
     await testUser.save();
 
-    // Create test DragonPass product
     testProduct = new ProductModel({
       title: 'Premium Lounge Access',
       provider: 'dragonpass',
@@ -83,7 +82,6 @@ describe('Enhanced Cancellation System', () => {
     });
     await testProduct.save();
 
-    // Create test order
     testOrder = new OrderModel({
       pnr: 'TEST-PNR-001',
       transactionId: 'TEST-TXN-001',
@@ -117,10 +115,17 @@ describe('Enhanced Cancellation System', () => {
   });
 
   describe('Authentication Middleware', () => {
-    it('should authenticate JWT token', () => {
+    it('should authenticate JWT token', async () => {
+      const credentials = {
+        email: 'test@example.com',
+        password: 'TestPassword123',
+      };
+      const authResult = await AuthService.authenticateUser(credentials);
+      expect(authResult.success).toBe(true);
+
       const mockReq = {
         headers: {
-          authorization: 'Bearer valid-jwt-token-12345'
+          authorization: `Bearer ${authResult.token}`
         }
       } as any;
 
@@ -133,13 +138,15 @@ describe('Enhanced Cancellation System', () => {
 
       MultiTierAuthMiddleware.authenticate(mockReq, mockRes, mockNext);
 
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       expect(mockNext).toHaveBeenCalled();
       expect(mockReq.authContext).toBeDefined();
       expect(mockReq.authContext?.type).toBe('jwt');
       expect(mockReq.authContext?.requestSource).toBe('customer_app');
     });
 
-    it('should authenticate API key', () => {
+    it('should authenticate API key', async () => {
       const mockReq = {
         headers: {
           'x-api-key': 'valid-api-key-12345'
@@ -155,13 +162,15 @@ describe('Enhanced Cancellation System', () => {
 
       MultiTierAuthMiddleware.authenticate(mockReq, mockRes, mockNext);
 
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       expect(mockNext).toHaveBeenCalled();
       expect(mockReq.authContext).toBeDefined();
       expect(mockReq.authContext?.type).toBe('api_key');
       expect(mockReq.authContext?.requestSource).toBe('partner_api');
     });
 
-    it('should reject invalid authentication', () => {
+    it('should reject invalid authentication', async () => {
       const mockReq = {
         headers: {}
       } as any;
@@ -174,6 +183,8 @@ describe('Enhanced Cancellation System', () => {
       const mockNext = jest.fn();
 
       MultiTierAuthMiddleware.authenticate(mockReq, mockRes, mockNext);
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       expect(mockNext).not.toHaveBeenCalled();
       expect(mockRes.status).toHaveBeenCalledWith(401);

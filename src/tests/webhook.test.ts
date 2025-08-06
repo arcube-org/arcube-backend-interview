@@ -6,8 +6,8 @@ import { WebhookDispatcherService } from '../services/webhook-dispatcher.service
 import { WebhookRegistryService } from '../services/webhook-registry.service';
 import { CancellationEventType } from '../types/webhook.types';
 import { db } from '../config/database';
+import { WebhookModel } from '../models/webhook.model';
 
-// Mock fetch for webhook testing
 global.fetch = jest.fn();
 
 describe('Webhook System', () => {
@@ -16,11 +16,9 @@ describe('Webhook System', () => {
   let webhookRegistry: WebhookRegistryService;
 
   beforeAll(async () => {
-    // Use existing database connection
     await db.connect();
     console.log('✅ Connected to test database');
 
-    // Initialize services
     eventBus = EventBusService.getInstance();
     webhookDispatcher = new WebhookDispatcherService();
     webhookRegistry = new WebhookRegistryService();
@@ -32,16 +30,17 @@ describe('Webhook System', () => {
   });
 
   beforeEach(async () => {
-    // Clear all collections
-    const collections = mongoose.connection.collections;
-    for (const key in collections) {
-      const collection = collections[key];
-      if (collection) {
-        await collection.deleteMany({});
-      }
-    }
+    const testWebhookNames = [
+      'Test Webhook',
+      'Duplicate Webhook',
+      'Failed Events Webhook',
+      'All Events Webhook',
+      'API Test Webhook',
+      'API List Test',
+      'Cancellation Integration Test'
+    ];
+    await WebhookModel.deleteMany({ name: { $in: testWebhookNames } });
 
-    // Clear event bus subscribers
     eventBus.clearSubscribers();
   });
 
@@ -55,13 +54,10 @@ describe('Webhook System', () => {
         correlationId: 'test-123'
       };
 
-      // Subscribe to event
       eventBus.subscribe(CancellationEventType.CANCELLATION_STARTED, mockHandler);
 
-      // Publish event
       await eventBus.publish(testEvent);
 
-      // Verify handler was called
       expect(mockHandler).toHaveBeenCalledWith(testEvent);
       expect(mockHandler).toHaveBeenCalledTimes(1);
     });
@@ -76,14 +72,11 @@ describe('Webhook System', () => {
         correlationId: 'test-456'
       };
 
-      // Subscribe multiple handlers
       eventBus.subscribe(CancellationEventType.CANCELLATION_FAILED, handler1);
       eventBus.subscribe(CancellationEventType.CANCELLATION_FAILED, handler2);
 
-      // Publish event
       await eventBus.publish(testEvent);
 
-      // Verify both handlers were called
       expect(handler1).toHaveBeenCalledWith(testEvent);
       expect(handler2).toHaveBeenCalledWith(testEvent);
     });
@@ -91,11 +84,9 @@ describe('Webhook System', () => {
     it('should unsubscribe handlers', () => {
       const handler = jest.fn();
       
-      // Subscribe and then unsubscribe
       eventBus.subscribe(CancellationEventType.CANCELLATION_COMPLETED, handler);
       eventBus.unsubscribe(CancellationEventType.CANCELLATION_COMPLETED, handler);
 
-      // Verify subscriber count is 0
       expect(eventBus.getSubscriberCount(CancellationEventType.CANCELLATION_COMPLETED)).toBe(0);
     });
   });
@@ -153,7 +144,6 @@ describe('Webhook System', () => {
     });
 
     it('should retrieve webhooks by event type', async () => {
-      // Register webhooks for different events
       await webhookRegistry.registerWebhook({
         name: 'Failed Events Webhook',
         url: 'https://example.com/failed',
@@ -166,42 +156,26 @@ describe('Webhook System', () => {
         events: [CancellationEventType.CANCELLATION_FAILED, CancellationEventType.CANCELLATION_COMPLETED]
       }, 'admin-123');
 
-      // Get webhooks for failed events
       const failedWebhooks = await webhookRegistry.getWebhooksByEvent(CancellationEventType.CANCELLATION_FAILED);
       expect(failedWebhooks).toHaveLength(2);
 
-      // Get webhooks for completed events
       const completedWebhooks = await webhookRegistry.getWebhooksByEvent(CancellationEventType.CANCELLATION_COMPLETED);
       expect(completedWebhooks).toHaveLength(1);
     });
   });
 
   describe('Webhook API Endpoints', () => {
-    const mockAuthContext = {
-      type: 'service_token' as const,
-      userId: 'admin-123',
-      userRole: 'admin',
-      permissions: ['manage_webhooks', 'view_webhooks'],
-      requestSource: 'admin_panel' as const
-    };
+    let authToken: string;
 
-    beforeEach(() => {
-      // Mock authentication middleware - simplified approach
-      jest.doMock('../middleware/auth/multi-tier-auth.middleware', () => ({
-        MultiTierAuthMiddleware: {
-          authenticate: jest.fn((req: any, res: any, next: any) => {
-            req.authContext = mockAuthContext;
-            next();
-          }),
-          hasPermission: jest.fn((permission: string) => (req: any, res: any, next: any) => {
-            if (req.authContext?.permissions.includes(permission)) {
-              next();
-            } else {
-              res.status(403).json({ success: false, error: 'Access denied' });
-            }
-          })
-        }
-      }));
+    beforeEach(async () => {
+      const loginResponse = await request(app)
+        .post('/auth/login')
+        .send({
+          email: 'admin@arcube.com',
+          password: 'Admin@123456'
+        });
+
+      authToken = loginResponse.body.data.token;
     });
 
     it('should register webhook via API', async () => {
@@ -214,6 +188,7 @@ describe('Webhook System', () => {
 
       const response = await request(app)
         .post('/webhooks')
+        .set('Authorization', `Bearer ${authToken}`)
         .send(webhookData)
         .expect(201);
 
@@ -223,7 +198,6 @@ describe('Webhook System', () => {
     });
 
     it('should retrieve webhooks via API', async () => {
-      // First register a webhook
       await webhookRegistry.registerWebhook({
         name: 'API List Test',
         url: 'https://example.com/list-test',
@@ -232,6 +206,7 @@ describe('Webhook System', () => {
 
       const response = await request(app)
         .get('/webhooks')
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -240,14 +215,12 @@ describe('Webhook System', () => {
     });
 
     it('should test webhook via API', async () => {
-      // Mock fetch response
       (fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         status: 200,
         statusText: 'OK'
       });
 
-      // Register a webhook first
       const webhook = await webhookRegistry.registerWebhook({
         name: 'API Test Webhook',
         url: 'https://example.com/test-webhook',
@@ -256,6 +229,7 @@ describe('Webhook System', () => {
 
       const response = await request(app)
         .post(`/webhooks/${webhook.id}/test`)
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -274,21 +248,18 @@ describe('Webhook System', () => {
 
   describe('Webhook Integration with Cancellation', () => {
     it('should dispatch webhooks when cancellation events occur', async () => {
-      // Mock fetch for webhook delivery
       (fetch as jest.Mock).mockResolvedValue({
         ok: true,
         status: 200,
         statusText: 'OK'
       });
 
-      // Register a webhook
       await webhookRegistry.registerWebhook({
         name: 'Cancellation Integration Test',
         url: 'https://example.com/cancellation-webhook',
         events: [CancellationEventType.CANCELLATION_STARTED, CancellationEventType.CANCELLATION_FAILED]
       }, 'admin-123');
 
-      // Subscribe webhook dispatcher to events
       eventBus.subscribe(CancellationEventType.CANCELLATION_STARTED, async (event) => {
         await webhookDispatcher.dispatchEvent(event);
       });
@@ -297,7 +268,6 @@ describe('Webhook System', () => {
         await webhookDispatcher.dispatchEvent(event);
       });
 
-      // Publish a cancellation event
       const testEvent = {
         type: CancellationEventType.CANCELLATION_STARTED,
         data: {
@@ -311,10 +281,8 @@ describe('Webhook System', () => {
 
       await eventBus.publish(testEvent);
 
-      // Wait a bit for async processing
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Verify webhook was called
       expect(fetch).toHaveBeenCalledWith(
         'https://example.com/cancellation-webhook',
         expect.objectContaining({

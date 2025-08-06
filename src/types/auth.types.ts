@@ -24,6 +24,7 @@ export interface ServiceTokenPayload {
 export interface AuthResult {
   success: boolean;
   authContext?: AuthContext;
+  token?: string;
   error?: string;
   errorCode?: string;
 }

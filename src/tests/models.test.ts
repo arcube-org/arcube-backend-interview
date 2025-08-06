@@ -1,4 +1,3 @@
-// Jest tests for models
 import mongoose from 'mongoose';
 import { 
   UserModel, 
@@ -9,10 +8,8 @@ import {
 import { env } from '../config/environment';
 
 describe('Models', () => {
-  // Database connection setup
   beforeAll(async () => {
     try {
-      // Connect to test database
       await mongoose.connect(env.MONGODB_URI);
       console.log('✅ Connected to test database');
     } catch (error) {
@@ -23,7 +20,6 @@ describe('Models', () => {
 
   afterAll(async () => {
     try {
-      // Close database connection
       await mongoose.connection.close();
       console.log('✅ Disconnected from test database');
     } catch (error) {
@@ -31,17 +27,33 @@ describe('Models', () => {
     }
   });
 
-  // Clean up database before and after each test
   beforeEach(async () => {
     try {
-      // Clear all collections
-      const collections = mongoose.connection.collections;
-      for (const key in collections) {
-        const collection = collections[key];
-        if (collection) {
-          await collection.deleteMany({});
-        }
-      }
+      const testEmails = [
+        'john.doe@example.com',
+        'test.user@example.com',
+        'test@example.com',
+        'customer@example.com',
+        'cancellation-test@example.com',
+        'cancellation-customer@example.com'
+      ];
+      await UserModel.deleteMany({ email: { $in: testEmails } });
+      await UserModel.deleteMany({ id: 'test-user-id' });
+
+      const testProductIds = ['test-product-id'];
+      await ProductModel.deleteMany({ id: { $in: testProductIds } });
+      await ProductModel.deleteMany({ 'metadata.loungeId': { $in: ['TEST-LOUNGE-001', 'CANCEL-LOUNGE-001'] } });
+
+      const testOrderIds = ['test-order-id'];
+      const testPnrs = ['TEST-PNR-001', 'CANCEL-PNR-001'];
+      const testTransactionIds = ['TEST-TXN-001', 'CANCEL-TXN-001'];
+      await OrderModel.deleteMany({ id: { $in: testOrderIds } });
+      await OrderModel.deleteMany({ pnr: { $in: testPnrs } });
+      await OrderModel.deleteMany({ transactionId: { $in: testTransactionIds } });
+
+      const testCancellationIds = ['test-cancellation-id'];
+      await CancellationRecordModel.deleteMany({ id: { $in: testCancellationIds } });
+      await CancellationRecordModel.deleteMany({ correlationId: 'CORRELATION-001' });
     } catch (error) {
       console.error('❌ Error cleaning database:', error);
     }
@@ -49,14 +61,31 @@ describe('Models', () => {
 
   afterEach(async () => {
     try {
-      // Clear all collections after each test
-      const collections = mongoose.connection.collections;
-      for (const key in collections) {
-        const collection = collections[key];
-        if (collection) {
-          await collection.deleteMany({});
-        }
-      }
+      const testEmails = [
+        'john.doe@example.com',
+        'test.user@example.com',
+        'test@example.com',
+        'customer@example.com',
+        'cancellation-test@example.com',
+        'cancellation-customer@example.com'
+      ];
+      await UserModel.deleteMany({ email: { $in: testEmails } });
+      await UserModel.deleteMany({ id: 'test-user-id' });
+
+      const testProductIds = ['test-product-id'];
+      await ProductModel.deleteMany({ id: { $in: testProductIds } });
+      await ProductModel.deleteMany({ 'metadata.loungeId': { $in: ['TEST-LOUNGE-001', 'CANCEL-LOUNGE-001'] } });
+
+      const testOrderIds = ['test-order-id'];
+      const testPnrs = ['TEST-PNR-001', 'CANCEL-PNR-001'];
+      const testTransactionIds = ['TEST-TXN-001', 'CANCEL-TXN-001'];
+      await OrderModel.deleteMany({ id: { $in: testOrderIds } });
+      await OrderModel.deleteMany({ pnr: { $in: testPnrs } });
+      await OrderModel.deleteMany({ transactionId: { $in: testTransactionIds } });
+
+      const testCancellationIds = ['test-cancellation-id'];
+      await CancellationRecordModel.deleteMany({ id: { $in: testCancellationIds } });
+      await CancellationRecordModel.deleteMany({ correlationId: 'CORRELATION-001' });
     } catch (error) {
       console.error('❌ Error cleaning database:', error);
     }
@@ -67,6 +96,7 @@ describe('Models', () => {
       const userData = {
         name: 'John Doe',
         email: 'john.doe@example.com',
+        password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
       };
@@ -88,6 +118,7 @@ describe('Models', () => {
       const userData = {
         name: 'Test User',
         email: 'test.user@example.com',
+        password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
       };
@@ -114,6 +145,7 @@ describe('Models', () => {
       const userData = {
         name: 'John Doe',
         email: 'john.doe@example.com',
+        password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
       };
@@ -130,6 +162,7 @@ describe('Models', () => {
         id: 'test-user-id',
         name: 'John Doe',
         email: 'john.doe@example.com',
+        password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
       };
@@ -224,16 +257,15 @@ describe('Models', () => {
     let testProduct: any;
 
     beforeEach(async () => {
-      // Create test user
       testUser = new UserModel({
         name: 'Test User',
         email: 'test@example.com',
+        password: 'TestPassword123',
         role: 'user',
         isActive: true,
       });
       await testUser.save();
 
-      // Create test product
       testProduct = new ProductModel({
         title: 'Test Product',
         provider: 'dragonpass',
@@ -362,16 +394,15 @@ describe('Models', () => {
     let testOrder: any;
 
     beforeEach(async () => {
-      // Create test user
       testUser = new UserModel({
         name: 'Cancellation Test User',
         email: 'cancellation-test@example.com',
+        password: 'TestPassword123',
         role: 'user',
         isActive: true,
       });
       await testUser.save();
 
-      // Create test product
       testProduct = new ProductModel({
         title: 'Cancellation Test Product',
         provider: 'dragonpass',
@@ -396,11 +427,10 @@ describe('Models', () => {
           loungeId: 'CANCEL-LOUNGE-001',
           loungeName: 'Cancellation Test Lounge',
         },
-      });
-      await testProduct.save();
+          });
+    await testProduct.save();
 
-      // Create test order
-      testOrder = new OrderModel({
+    testOrder = new OrderModel({
         pnr: 'CANCEL-PNR-001',
         transactionId: 'CANCEL-TXN-001',
         customer: {

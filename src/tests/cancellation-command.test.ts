@@ -33,25 +33,19 @@ describe('Cancellation Command Pattern', () => {
   });
 
   beforeEach(async () => {
-    // Clean up database
-    const collections = mongoose.connection.collections;
-    for (const key in collections) {
-      const collection = collections[key];
-      if (collection) {
-        await collection.deleteMany({});
-      }
-    }
+    await UserModel.deleteMany({ email: 'test@example.com' });
+    await ProductModel.deleteMany({ 'metadata.bookingId': 'DP-123456789' });
+    await OrderModel.deleteMany({ pnr: 'TEST-PNR-001', transactionId: 'TEST-TXN-001' });
 
-    // Create test user
     testUser = new UserModel({
       name: 'Test User',
       email: 'test@example.com',
+      password: 'TestPassword123',
       role: 'user',
       isActive: true,
     });
     await testUser.save();
 
-    // Create test DragonPass product
     testProduct = new ProductModel({
       title: 'Premium Lounge Access',
       provider: 'dragonpass',
@@ -85,7 +79,6 @@ describe('Cancellation Command Pattern', () => {
     });
     await testProduct.save();
 
-    // Create test order
     testOrder = new OrderModel({
       pnr: 'TEST-PNR-001',
       transactionId: 'TEST-TXN-001',

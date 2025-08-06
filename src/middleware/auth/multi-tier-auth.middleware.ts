@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthContext, AuthResult, REQUEST_SOURCE_MAP, ROLE_PERMISSIONS } from '../../types/auth.types';
+import { AuthService } from '../../services/auth.service';
 
 // Extend Request interface to include auth context
 declare global {
@@ -15,44 +16,44 @@ export class MultiTierAuthMiddleware {
    * Main authentication middleware that determines auth type and validates
    */
   static authenticate(req: Request, res: Response, next: NextFunction): void {
-    try {
-      const authResult = MultiTierAuthMiddleware.determineAuthType(req);
-      
-      if (!authResult.success) {
-        res.status(401).json({
-          success: false,
-          error: authResult.error,
-          errorCode: authResult.errorCode
-        });
-        return;
-      }
+    MultiTierAuthMiddleware.determineAuthType(req)
+      .then((authResult) => {
+        if (!authResult.success) {
+          res.status(401).json({
+            success: false,
+            error: authResult.error,
+            errorCode: authResult.errorCode
+          });
+          return;
+        }
 
-      // Attach auth context to request
-      if (authResult.authContext) {
-        req.authContext = authResult.authContext;
-      }
-      next();
-    } catch (error) {
-      console.error('Authentication error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Authentication service error',
-        errorCode: 'AUTH_SERVICE_ERROR'
+        // Attach auth context to request
+        if (authResult.authContext) {
+          req.authContext = authResult.authContext;
+        }
+        next();
+      })
+      .catch((error) => {
+        console.error('Authentication error:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Authentication service error',
+          errorCode: 'AUTH_SERVICE_ERROR'
+        });
       });
-    }
   }
 
   /**
    * Determine authentication type and validate accordingly
    */
-  private static determineAuthType(req: Request): AuthResult {
+  private static async determineAuthType(req: Request): Promise<AuthResult> {
     const authHeader = req.headers.authorization;
     const apiKeyHeader = req.headers['x-api-key'];
     const serviceTokenHeader = req.headers['x-service-token'];
 
     // Check for JWT token (Bearer token)
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      return MultiTierAuthMiddleware.validateJwt(authHeader.substring(7));
+      return await MultiTierAuthMiddleware.validateJwt(authHeader.substring(7));
     }
 
     // Check for API key
@@ -73,12 +74,9 @@ export class MultiTierAuthMiddleware {
   }
 
   /**
-   * Validate JWT token (using constant values for now)
+   * Validate JWT token using AuthService
    */
-  private static validateJwt(token: string): AuthResult {
-    // For now, accept any JWT token and return a mock customer user
-    // In real implementation, this would validate the JWT signature and extract claims
-    
+  private static async validateJwt(token: string): Promise<AuthResult> {
     if (!token || token.length < 10) {
       return {
         success: false,
@@ -87,29 +85,8 @@ export class MultiTierAuthMiddleware {
       };
     }
 
-    // Mock JWT payload - in real implementation, this would be decoded from the token
-    const mockJwtPayload = {
-      userId: 'customer-123',
-      email: 'customer@example.com',
-      role: 'user' as const,
-      permissions: ROLE_PERMISSIONS.customer
-    };
-
-    const authContext: AuthContext = {
-      type: 'jwt',
-      userId: mockJwtPayload.userId,
-      userRole: mockJwtPayload.role,
-      permissions: [...mockJwtPayload.permissions],
-      requestSource: REQUEST_SOURCE_MAP.jwt,
-      metadata: {
-        email: mockJwtPayload.email
-      }
-    };
-
-    return {
-      success: true,
-      authContext
-    };
+    // Use AuthService to validate JWT token
+    return await AuthService.validateJwtToken(token);
   }
 
   /**

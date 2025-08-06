@@ -2,7 +2,7 @@
 
 import { config } from 'dotenv';
 import mongoose from 'mongoose';
-import { seedDatabase, checkSeedStatus } from '../utils/seed-database';
+import { seedDatabase, checkSeedStatus, clearDefaultUsers } from '../utils/seed-database';
 import { env } from '../config/environment';
 
 // Load environment variables
@@ -15,6 +15,10 @@ const runSeed = async (): Promise<void> => {
     // Connect to database
     await mongoose.connect(env.MONGODB_URI);
     console.log('✅ Connected to database');
+    
+    // Clear only default users before seeding
+    console.log('🗑️  Clearing existing default users...');
+    await clearDefaultUsers();
     
     // Run seed
     await seedDatabase();
