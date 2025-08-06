@@ -1,5 +1,5 @@
 import express, { Application, NextFunction, Request, Response } from "express";
-import ordersRouter from "./routes/orders";
+import ordersRouter from "./routes/orders.route";
 
 const app: Application = express();
 

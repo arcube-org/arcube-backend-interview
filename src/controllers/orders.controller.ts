@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import * as orderService from '../services/orderService';
+import * as orderService from '../services/orders.service';
 import { ApiResponse, CancelOrderRequest, CancelOrderResponse } from '../types';
 
 export const cancelOrder = async (
