@@ -1,14 +1,22 @@
 import express, { Application, NextFunction, Request, Response } from "express";
 import { db } from "./config/database";
 import ordersRouter from "./routes/orders.route";
+import { seedDatabase, checkSeedStatus } from "./utils/seed-database";
 
 const app: Application = express();
 
-// Initialize database connection
+// Initialize database connection and seed data
 const initializeDatabase = async (): Promise<void> => {
   try {
     await db.connect();
     console.log('✅ Database initialized successfully');
+    
+    // Seed database with default users
+    await seedDatabase();
+    
+    // Check and display database status
+    await checkSeedStatus();
+    
   } catch (error) {
     console.error('❌ Failed to initialize database:', error);
     process.exit(1);

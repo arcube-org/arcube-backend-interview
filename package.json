@@ -8,7 +8,12 @@
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "dev:watch": "nodemon --exec ts-node src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:models": "jest src/tests/models.test.ts",
+    "test:seed": "jest src/tests/seed.test.ts",
+    "seed": "ts-node src/scripts/seed.ts"
   },
   "repository": {
     "type": "git",
@@ -47,6 +52,7 @@
     "jest": "^30.0.5",
     "nodemon": "^3.1.10",
     "supertest": "^7.1.4",
+    "ts-jest": "^29.4.1",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
