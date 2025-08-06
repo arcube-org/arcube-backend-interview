@@ -27,3 +27,72 @@ export const cancelOrder = async (
     next(e);
   }
 };
+
+export const cancelProduct = async (
+  req: Request<{ orderId: string; productId: string }, ApiResponse<any>, { reason?: string }>,
+  res: Response<ApiResponse<any>>,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { orderId, productId } = req.params;
+    const { reason } = req.body;
+    
+    if (!orderId || !productId) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'orderId and productId are required' 
+      });
+      return;
+    }
+
+    const result = await orderService.cancelProduct(orderId, productId, reason);
+    res.json({ 
+      success: true, 
+      data: result 
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getCancellationAuditTrail = async (
+  req: Request,
+  res: Response<ApiResponse<any>>,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const auditTrail = orderService.getCancellationAuditTrail();
+    res.json({ 
+      success: true, 
+      data: auditTrail 
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const getCancellationAuditTrailByCorrelationId = async (
+  req: Request<{ correlationId: string }>,
+  res: Response<ApiResponse<any>>,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { correlationId } = req.params;
+    
+    if (!correlationId) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'correlationId is required' 
+      });
+      return;
+    }
+
+    const auditTrail = orderService.getCancellationAuditTrailByCorrelationId(correlationId);
+    res.json({ 
+      success: true, 
+      data: auditTrail 
+    });
+  } catch (e) {
+    next(e);
+  }
+};
