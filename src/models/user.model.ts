@@ -1,7 +1,9 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 import { User, UserRole } from '../types';
 
 export interface UserDocument extends Document {
+  id: string;
   name: string;
   email: string;
   role: 'admin' | 'partner' | 'user' | 'system';
@@ -13,6 +15,12 @@ export interface UserDocument extends Document {
 // User schema
 const userSchema = new Schema<UserDocument>(
   {
+    id: {
+      type: String,
+      required: [true, 'User ID is required'],
+      default: () => uuidv4(),
+      trim: true,
+    },
     name: {
       type: String,
       required: [true, 'Name is required'],
@@ -45,6 +53,7 @@ const userSchema = new Schema<UserDocument>(
 );
 
 // Indexes
+userSchema.index({ id: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 
@@ -57,8 +66,6 @@ userSchema.virtual('fullName').get(function() {
 userSchema.set('toJSON', {
   virtuals: true,
   transform: function(doc: any, ret: any) {
-    ret.id = ret._id;
-    delete ret._id;
     delete ret.__v;
     return ret;
   },

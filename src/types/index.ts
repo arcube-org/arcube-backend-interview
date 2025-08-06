@@ -1,6 +1,6 @@
 // Base entity interface for all database documents
 export interface BaseEntity {
-  _id: string;
+  id: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -120,12 +120,12 @@ export interface CustomerInfo {
 // Order status
 export type OrderStatus = 'pending' | 'confirmed' | 'cancelled' | 'refunded' | 'expired';
 
-// Order entity based on JSON structure
+// Order entity
 export interface Order extends BaseEntity {
   pnr: string; // Passenger Name Record
   transactionId: string; // Payment transaction ID
   customer: CustomerInfo;
-  products: Product[];
+  products: string[]; // Array of Product IDs
   segments: FlightSegment[];
   status: OrderStatus;
   userId?: string; // Optional reference to User entity
@@ -135,7 +135,7 @@ export interface Order extends BaseEntity {
 }
 
 // Cancellation record entity (for audit trail)
-export interface CancellationRecord {
+export interface CancellationRecord extends BaseEntity {
   orderId: string;
   productId: string; // Reference to Product.id
   reason: string;
@@ -155,9 +155,10 @@ export interface CancellationRecord {
   cancelledAt: Date;
 }
 
-// Database indexes for performance
+// Database indexes configuration
 export interface DatabaseIndexes {
   users: {
+    id: 1; // Unique index
     email: 1; // Unique index
     role: 1;
     isActive: 1;
@@ -171,7 +172,7 @@ export interface DatabaseIndexes {
     'metadata.loungeId': 1;
   };
   orders: {
-    _id: 1; // Unique index
+    id: 1; // Unique index
     pnr: 1;
     transactionId: 1; // Unique index
     'customer.email': 1;
@@ -180,6 +181,7 @@ export interface DatabaseIndexes {
     createdAt: 1;
   };
   cancellationRecords: {
+    id: 1; // Unique index
     orderId: 1;
     productId: 1;
     correlationId: 1;
@@ -188,7 +190,7 @@ export interface DatabaseIndexes {
   };
 }
 
-// Existing API types (keeping for backward compatibility)
+// API request/response types
 export interface CancelOrderRequest {
   orderId: string;
   reason?: string;
@@ -201,6 +203,7 @@ export interface CancelOrderResponse {
   status: 'cancelled';
 }
 
+// Generic API response wrapper
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;

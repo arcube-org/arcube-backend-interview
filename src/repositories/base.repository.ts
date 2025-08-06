@@ -11,7 +11,7 @@ export abstract class BaseRepositoryImpl<T extends Document> implements BaseRepo
 
   async findById(id: string): Promise<T | null> {
     try {
-      return await this.model.findById(id);
+      return await this.model.findOne({ id });
     } catch (error) {
       throw new Error(`Failed to find document by id: ${error}`);
     }
@@ -28,7 +28,7 @@ export abstract class BaseRepositoryImpl<T extends Document> implements BaseRepo
 
   async update(id: string, data: Partial<T>): Promise<T | null> {
     try {
-      return await this.model.findByIdAndUpdate(id, data, { new: true });
+      return await this.model.findOneAndUpdate({ id }, data, { new: true });
     } catch (error) {
       throw new Error(`Failed to update document: ${error}`);
     }

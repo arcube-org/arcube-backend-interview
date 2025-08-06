@@ -31,7 +31,7 @@ export class CancellationRepository extends BaseRepositoryImpl<CancellationRecor
         updateData.externalProviderResponse = response;
       }
 
-      return await this.model.findByIdAndUpdate(id, updateData, { new: true });
+      return await this.model.findOneAndUpdate({ id }, updateData, { new: true });
     } catch (error) {
       throw new Error(`Failed to update cancellation status: ${error}`);
     }
@@ -40,8 +40,6 @@ export class CancellationRepository extends BaseRepositoryImpl<CancellationRecor
   async findPendingCancellations(): Promise<CancellationRecordDocument[]> {
     try {
       return await this.model.find({ status: 'pending' })
-        .populate('orderId')
-        .populate('requestedBy')
         .sort({ createdAt: 1 });
     } catch (error) {
       throw new Error(`Failed to find pending cancellations: ${error}`);

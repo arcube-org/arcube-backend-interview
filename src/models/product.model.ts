@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 import { Product, ProductType, ProductStatus, Price, CancellationPolicy, CancellationWindow } from '../types';
 
 // Product document interface extending Mongoose Document
@@ -129,7 +130,7 @@ const productSchema = new Schema<ProductDocument>(
     id: {
       type: String,
       required: [true, 'Product ID is required'],
-      unique: true,
+      default: () => uuidv4(),
       trim: true,
     },
     title: {
@@ -180,6 +181,7 @@ const productSchema = new Schema<ProductDocument>(
 );
 
 // Indexes
+productSchema.index({ id: 1 }, { unique: true });
 productSchema.index({ type: 1 });
 productSchema.index({ status: 1 });
 productSchema.index({ provider: 1 });
@@ -191,8 +193,6 @@ productSchema.index({ serviceDateTime: 1 });
 productSchema.set('toJSON', {
   virtuals: true,
   transform: function(doc: any, ret: any) {
-    ret.id = ret._id;
-    delete ret._id;
     delete ret.__v;
     return ret;
   },

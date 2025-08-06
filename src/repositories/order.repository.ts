@@ -11,7 +11,7 @@ export class OrderRepository extends BaseRepositoryImpl<OrderDocument> {
       return await this.model.findOne({
         pnr,
         'customer.email': email
-      }).populate('products').populate('userId');
+      });
     } catch (error) {
       throw new Error(`Failed to find order by PNR and email: ${error}`);
     }
@@ -19,13 +19,13 @@ export class OrderRepository extends BaseRepositoryImpl<OrderDocument> {
 
   async findProductById(orderId: string, productId: string): Promise<any> {
     try {
-      const order = await this.model.findById(orderId).populate('products');
+      const order = await this.model.findOne({ id: orderId });
       if (!order) {
         return null;
       }
       
       // Find the specific product in the order's products array
-      const product = order.products.find((product: any) => product.id === productId);
+      const product = order.products.find((product: any) => product === productId);
       return product || null;
     } catch (error) {
       throw new Error(`Failed to find product by id: ${error}`);
@@ -36,8 +36,8 @@ export class OrderRepository extends BaseRepositoryImpl<OrderDocument> {
     try {
       return await this.model.findOneAndUpdate(
         { 
-          _id: orderId,
-          'products': { $elemMatch: { id: productId } }
+          id: orderId,
+          'products': { $elemMatch: { $eq: productId } }
         },
         { 
           $set: { 'products.$.status': status }

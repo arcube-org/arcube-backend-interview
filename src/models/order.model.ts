@@ -1,8 +1,10 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 import { Order, OrderStatus, CustomerInfo, FlightSegment } from '../types';
 
 // Order document interface extending Mongoose Document
 export interface OrderDocument extends Document {
+  id: string;
   pnr: string;
   transactionId: string;
   customer: {
@@ -11,7 +13,7 @@ export interface OrderDocument extends Document {
     lastName: string;
     phone?: string;
   };
-  products: mongoose.Types.ObjectId[];
+  products: string[];
   segments: Array<{
     segmentId: string;
     flightNumber: string;
@@ -23,7 +25,7 @@ export interface OrderDocument extends Document {
     passengerIds: string[];
   }>;
   status: 'pending' | 'confirmed' | 'cancelled' | 'refunded' | 'expired';
-  userId?: mongoose.Types.ObjectId;
+  userId?: string;
   totalAmount?: number;
   totalCurrency?: string;
   notes?: string;
@@ -107,6 +109,12 @@ const flightSegmentSchema = new Schema<FlightSegment>({
 // Order schema
 const orderSchema = new Schema<OrderDocument>(
   {
+    id: {
+      type: String,
+      required: [true, 'Order ID is required'],
+      default: () => uuidv4(),
+      trim: true,
+    },
     pnr: {
       type: String,
       required: [true, 'PNR is required'],
@@ -124,8 +132,7 @@ const orderSchema = new Schema<OrderDocument>(
       required: [true, 'Customer information is required'],
     },
     products: [{
-      type: Schema.Types.ObjectId,
-      ref: 'Product',
+      type: String,
       required: true,
     }],
     segments: [flightSegmentSchema],
@@ -135,8 +142,7 @@ const orderSchema = new Schema<OrderDocument>(
       default: 'pending',
     },
     userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
     },
     totalAmount: {
       type: Number,
@@ -161,6 +167,7 @@ const orderSchema = new Schema<OrderDocument>(
 );
 
 // Indexes
+orderSchema.index({ id: 1 }, { unique: true });
 orderSchema.index({ pnr: 1 });
 orderSchema.index({ 'customer.email': 1 });
 orderSchema.index({ status: 1 });
@@ -183,8 +190,6 @@ orderSchema.virtual('orderSummary').get(function() {
 orderSchema.set('toJSON', {
   virtuals: true,
   transform: function(doc: any, ret: any) {
-    ret.id = ret._id;
-    delete ret._id;
     delete ret.__v;
     return ret;
   },

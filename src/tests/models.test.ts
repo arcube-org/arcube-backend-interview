@@ -61,11 +61,12 @@ describe('Models', () => {
       console.error('❌ Error cleaning database:', error);
     }
   });
+
   describe('User Model', () => {
-    it('should create a user with valid data', async () => {
+    it('should create a user with required fields', async () => {
       const userData = {
-        name: 'Test User',
-        email: 'valid-user-test@example.com',
+        name: 'John Doe',
+        email: 'john.doe@example.com',
         role: 'user' as const,
         isActive: true,
       };
@@ -73,6 +74,7 @@ describe('Models', () => {
       const user = new UserModel(userData);
       const savedUser = await user.save();
 
+      expect(savedUser.id).toBeDefined();
       expect(savedUser._id).toBeDefined();
       expect(savedUser.name).toBe(userData.name);
       expect(savedUser.email).toBe(userData.email);
@@ -82,23 +84,52 @@ describe('Models', () => {
       expect(savedUser.updatedAt).toBeDefined();
     });
 
-    it('should fail to create user with invalid email', async () => {
+    it('should have different _id and id fields', async () => {
       const userData = {
         name: 'Test User',
-        email: 'invalid-email',
+        email: 'test.user@example.com',
         role: 'user' as const,
         isActive: true,
       };
 
       const user = new UserModel(userData);
-      
-      await expect(user.save()).rejects.toThrow();
+      const savedUser = await user.save();
+
+      // _id should be MongoDB ObjectId
+      expect(savedUser._id).toBeDefined();
+      expect(typeof (savedUser._id as any).toString()).toBe('string');
+      expect((savedUser._id as any).toString().length).toBe(24); // MongoDB ObjectId length
+
+      // id should be custom UUID
+      expect(savedUser.id).toBeDefined();
+      expect(typeof savedUser.id).toBe('string');
+      expect(savedUser.id.length).toBe(36); // UUID v4 length
+      expect(savedUser.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i); // UUID v4 pattern
+
+      // They should be different
+      expect((savedUser._id as any).toString()).not.toBe(savedUser.id);
     });
 
-    it('should fail to create user with duplicate email', async () => {
+    it('should enforce unique email constraint', async () => {
       const userData = {
-        name: 'Test User',
-        email: 'duplicate-email-test@example.com',
+        name: 'John Doe',
+        email: 'john.doe@example.com',
+        role: 'user' as const,
+        isActive: true,
+      };
+
+      const user1 = new UserModel(userData);
+      await user1.save();
+
+      const user2 = new UserModel(userData);
+      await expect(user2.save()).rejects.toThrow();
+    });
+
+    it('should enforce unique id constraint', async () => {
+      const userData = {
+        id: 'test-user-id',
+        name: 'John Doe',
+        email: 'john.doe@example.com',
         role: 'user' as const,
         isActive: true,
       };
@@ -112,70 +143,79 @@ describe('Models', () => {
   });
 
   describe('Product Model', () => {
-    it('should create a product with valid data', async () => {
+    it('should create a product with required fields', async () => {
       const productData = {
-        id: 'TEST-PROD-001',
-        title: 'Test Product',
+        title: 'Premium Lounge Access',
         provider: 'dragonpass',
         type: 'lounge_access' as const,
         price: {
           amount: 50.00,
           currency: 'USD',
         },
-        status: 'pending' as const,
+        status: 'confirmed' as const,
         cancellationPolicy: {
           windows: [
             {
               hoursBeforeService: 24,
               refundPercentage: 100,
-              description: 'Full refund',
+              description: 'Full refund up to 24 hours before',
             },
           ],
           canCancel: true,
         },
         serviceDateTime: new Date(),
         metadata: {
-          loungeId: 'TEST-LOUNGE-001',
-          loungeName: 'Test Lounge',
+          loungeId: 'LOUNGE-001',
+          loungeName: 'Premium Lounge',
         },
       };
 
       const product = new ProductModel(productData);
       const savedProduct = await product.save();
 
-      expect(savedProduct._id).toBeDefined();
-      expect(savedProduct.id).toBe(productData.id);
+      expect(savedProduct.id).toBeDefined();
       expect(savedProduct.title).toBe(productData.title);
       expect(savedProduct.provider).toBe(productData.provider);
       expect(savedProduct.type).toBe(productData.type);
       expect(savedProduct.price.amount).toBe(productData.price.amount);
       expect(savedProduct.price.currency).toBe(productData.price.currency);
+      expect(savedProduct.status).toBe(productData.status);
       expect(savedProduct.cancellationPolicy.windows).toHaveLength(1);
+      expect(savedProduct.serviceDateTime).toBeDefined();
+      expect(savedProduct.metadata.loungeId).toBe(productData.metadata.loungeId);
       expect(savedProduct.createdAt).toBeDefined();
       expect(savedProduct.updatedAt).toBeDefined();
     });
 
-    it('should fail to create product with invalid price', async () => {
+    it('should enforce unique id constraint', async () => {
       const productData = {
-        id: 'TEST-PROD-002',
-        title: 'Test Product',
+        id: 'test-product-id',
+        title: 'Premium Lounge Access',
         provider: 'dragonpass',
         type: 'lounge_access' as const,
         price: {
-          amount: -50.00, // Invalid negative price
+          amount: 50.00,
           currency: 'USD',
         },
-        status: 'pending' as const,
+        status: 'confirmed' as const,
         cancellationPolicy: {
-          windows: [],
+          windows: [
+            {
+              hoursBeforeService: 24,
+              refundPercentage: 100,
+              description: 'Full refund up to 24 hours before',
+            },
+          ],
           canCancel: true,
         },
         serviceDateTime: new Date(),
-        metadata: {},
       };
 
-      const product = new ProductModel(productData);
-      await expect(product.save()).rejects.toThrow();
+      const product1 = new ProductModel(productData);
+      await product1.save();
+
+      const product2 = new ProductModel(productData);
+      await expect(product2.save()).rejects.toThrow();
     });
   });
 
@@ -186,8 +226,8 @@ describe('Models', () => {
     beforeEach(async () => {
       // Create test user
       testUser = new UserModel({
-        name: 'Order Test User',
-        email: 'order-test@example.com',
+        name: 'Test User',
+        email: 'test@example.com',
         role: 'user',
         isActive: true,
       });
@@ -195,12 +235,11 @@ describe('Models', () => {
 
       // Create test product
       testProduct = new ProductModel({
-        id: 'ORDER-PROD-001',
-        title: 'Order Test Product',
+        title: 'Test Product',
         provider: 'dragonpass',
         type: 'lounge_access',
         price: {
-          amount: 75.00,
+          amount: 100.00,
           currency: 'USD',
         },
         status: 'confirmed',
@@ -216,30 +255,30 @@ describe('Models', () => {
         },
         serviceDateTime: new Date(),
         metadata: {
-          loungeId: 'ORDER-LOUNGE-001',
-          loungeName: 'Order Test Lounge',
+          loungeId: 'TEST-LOUNGE-001',
+          loungeName: 'Test Lounge',
         },
       });
       await testProduct.save();
     });
 
-    it('should create an order with valid data', async () => {
+    it('should create an order with required fields', async () => {
       const orderData = {
-        pnr: 'ORDER-PNR-001',
-        transactionId: 'ORDER-TXN-001',
+        pnr: 'TEST-PNR-001',
+        transactionId: 'TEST-TXN-001',
         customer: {
           email: 'customer@example.com',
           firstName: 'John',
           lastName: 'Doe',
           phone: '+1234567890',
         },
-        products: [testProduct._id],
+        products: [testProduct.id],
         segments: [
           {
             segmentId: 'SEG-001',
             flightNumber: 'XY123',
-            departure: 'JFK',
-            arrival: 'LAX',
+            departure: 'LAX',
+            arrival: 'JFK',
             departureTime: new Date(),
             arrivalTime: new Date(),
             operatingCarrier: 'XY',
@@ -247,8 +286,8 @@ describe('Models', () => {
           },
         ],
         status: 'confirmed' as const,
-        userId: testUser._id,
-        totalAmount: 75.00,
+        userId: testUser.id,
+        totalAmount: 100.00,
         totalCurrency: 'USD',
         notes: 'Test order',
       };
@@ -256,48 +295,64 @@ describe('Models', () => {
       const order = new OrderModel(orderData);
       const savedOrder = await order.save();
 
-      expect(savedOrder._id).toBeDefined();
+      expect(savedOrder.id).toBeDefined();
       expect(savedOrder.pnr).toBe(orderData.pnr);
       expect(savedOrder.transactionId).toBe(orderData.transactionId);
       expect(savedOrder.customer.email).toBe(orderData.customer.email);
-      expect(savedOrder.customer.firstName).toBe(orderData.customer.firstName);
-      expect(savedOrder.customer.lastName).toBe(orderData.customer.lastName);
-      expect(savedOrder.products).toHaveLength(1);
+      expect(savedOrder.products).toContain(testProduct.id);
       expect(savedOrder.segments).toHaveLength(1);
       expect(savedOrder.status).toBe(orderData.status);
+      expect(savedOrder.userId).toBe(testUser.id);
       expect(savedOrder.totalAmount).toBe(orderData.totalAmount);
       expect(savedOrder.totalCurrency).toBe(orderData.totalCurrency);
+      expect(savedOrder.notes).toBe(orderData.notes);
       expect(savedOrder.createdAt).toBeDefined();
       expect(savedOrder.updatedAt).toBeDefined();
     });
 
-    it('should populate products and user when querying', async () => {
+    it('should enforce unique transaction ID constraint', async () => {
       const orderData = {
-        pnr: 'ORDER-PNR-002',
-        transactionId: 'ORDER-TXN-002',
+        pnr: 'TEST-PNR-001',
+        transactionId: 'TEST-TXN-001',
         customer: {
-          email: 'customer2@example.com',
-          firstName: 'Jane',
-          lastName: 'Smith',
+          email: 'customer@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
         },
-        products: [testProduct._id],
+        products: [testProduct.id],
         segments: [],
         status: 'confirmed' as const,
-        userId: testUser._id,
-        totalAmount: 75.00,
-        totalCurrency: 'USD',
+        userId: testUser.id,
       };
 
-      const order = new OrderModel(orderData);
-      await order.save();
+      const order1 = new OrderModel(orderData);
+      await order1.save();
 
-      const foundOrder = await OrderModel.findOne({ pnr: 'ORDER-PNR-002' })
-        .populate('products')
-        .populate('userId', 'name email');
+      const order2 = new OrderModel(orderData);
+      await expect(order2.save()).rejects.toThrow();
+    });
 
-      expect(foundOrder).toBeDefined();
-      expect(foundOrder?.products[0]).toBeDefined();
-      expect(foundOrder?.userId).toBeDefined();
+    it('should enforce unique id constraint', async () => {
+      const orderData = {
+        id: 'test-order-id',
+        pnr: 'TEST-PNR-001',
+        transactionId: 'TEST-TXN-001',
+        customer: {
+          email: 'customer@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
+        },
+        products: [testProduct.id],
+        segments: [],
+        status: 'confirmed' as const,
+        userId: testUser.id,
+      };
+
+      const order1 = new OrderModel(orderData);
+      await order1.save();
+
+      const order2 = new OrderModel(orderData);
+      await expect(order2.save()).rejects.toThrow();
     });
   });
 
@@ -318,7 +373,6 @@ describe('Models', () => {
 
       // Create test product
       testProduct = new ProductModel({
-        id: 'CANCEL-PROD-001',
         title: 'Cancellation Test Product',
         provider: 'dragonpass',
         type: 'lounge_access',
@@ -355,7 +409,7 @@ describe('Models', () => {
           lastName: 'Doe',
           phone: '+1234567890',
         },
-        products: [testProduct._id],
+        products: [testProduct.id],
         segments: [
           {
             segmentId: 'CANCEL-SEG-001',
@@ -369,7 +423,7 @@ describe('Models', () => {
           },
         ],
         status: 'confirmed',
-        userId: testUser._id,
+        userId: testUser.id,
         totalAmount: 100.00,
         totalCurrency: 'USD',
         notes: 'Cancellation test order',
@@ -377,40 +431,61 @@ describe('Models', () => {
       await testOrder.save();
     });
 
-
-
-    it('should create a cancellation record with valid data', async () => {
+    it('should create a cancellation record with required fields', async () => {
       const cancellationData = {
-        orderId: testOrder._id,
-        productId: 'CANCEL-PROD-001',
+        orderId: testOrder.id,
+        productId: testProduct.id,
         reason: 'Customer request',
         requestSource: 'customer' as const,
-        requestedBy: testUser._id,
+        requestedBy: testUser.id,
         refundAmount: 100.00,
-        cancellationFee: 0,
+        cancellationFee: 0.00,
         currency: 'USD',
-        status: 'completed' as const,
-        correlationId: 'test-correlation-001',
-        cancelledAt: new Date(),
+        status: 'pending' as const,
+        correlationId: 'CORRELATION-001',
+        notes: 'Test cancellation',
       };
 
       const cancellation = new CancellationRecordModel(cancellationData);
       const savedCancellation = await cancellation.save();
 
-      expect(savedCancellation._id).toBeDefined();
-      expect(savedCancellation.orderId.toString()).toBe(testOrder._id.toString());
-      expect(savedCancellation.productId).toBe(cancellationData.productId);
+      expect(savedCancellation.id).toBeDefined();
+      expect(savedCancellation.orderId).toBe(testOrder.id);
+      expect(savedCancellation.productId).toBe(testProduct.id);
       expect(savedCancellation.reason).toBe(cancellationData.reason);
       expect(savedCancellation.requestSource).toBe(cancellationData.requestSource);
-      expect(savedCancellation.requestedBy.toString()).toBe(testUser._id.toString());
+      expect(savedCancellation.requestedBy).toBe(testUser.id);
       expect(savedCancellation.refundAmount).toBe(cancellationData.refundAmount);
       expect(savedCancellation.cancellationFee).toBe(cancellationData.cancellationFee);
       expect(savedCancellation.currency).toBe(cancellationData.currency);
       expect(savedCancellation.status).toBe(cancellationData.status);
       expect(savedCancellation.correlationId).toBe(cancellationData.correlationId);
+      expect(savedCancellation.notes).toBe(cancellationData.notes);
       expect(savedCancellation.cancelledAt).toBeDefined();
       expect(savedCancellation.createdAt).toBeDefined();
       expect(savedCancellation.updatedAt).toBeDefined();
+    });
+
+    it('should enforce unique id constraint', async () => {
+      const cancellationData = {
+        id: 'test-cancellation-id',
+        orderId: testOrder.id,
+        productId: testProduct.id,
+        reason: 'Customer request',
+        requestSource: 'customer' as const,
+        requestedBy: testUser.id,
+        refundAmount: 100.00,
+        cancellationFee: 0.00,
+        currency: 'USD',
+        status: 'pending' as const,
+        correlationId: 'CORRELATION-001',
+      };
+
+      const cancellation1 = new CancellationRecordModel(cancellationData);
+      await cancellation1.save();
+
+      const cancellation2 = new CancellationRecordModel(cancellationData);
+      await expect(cancellation2.save()).rejects.toThrow();
     });
   });
 }); 

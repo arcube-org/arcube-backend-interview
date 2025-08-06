@@ -1,11 +1,13 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface CancellationRecordDocument extends Document {
-  orderId: mongoose.Types.ObjectId;
+  id: string;
+  orderId: string;
   productId: string;
   reason: string;
   requestSource: 'customer' | 'admin' | 'system';
-  requestedBy: mongoose.Types.ObjectId;
+  requestedBy: string;
   refundAmount: number;
   cancellationFee: number;
   currency: string;
@@ -41,9 +43,14 @@ const externalProviderResponseSchema = new Schema({
 
 const cancellationRecordSchema = new Schema<CancellationRecordDocument>(
   {
+    id: {
+      type: String,
+      required: [true, 'Cancellation Record ID is required'],
+      default: () => uuidv4(),
+      trim: true,
+    },
     orderId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Order',
+      type: String,
       required: [true, 'Order ID is required'],
     },
     productId: {
@@ -63,8 +70,7 @@ const cancellationRecordSchema = new Schema<CancellationRecordDocument>(
       required: [true, 'Request source is required'],
     },
     requestedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
       required: [true, 'Requested by user is required'],
     },
     refundAmount: {
@@ -113,6 +119,7 @@ const cancellationRecordSchema = new Schema<CancellationRecordDocument>(
 );
 
 // Indexes
+cancellationRecordSchema.index({ id: 1 }, { unique: true });
 cancellationRecordSchema.index({ orderId: 1 });
 cancellationRecordSchema.index({ productId: 1 });
 cancellationRecordSchema.index({ correlationId: 1 });
@@ -123,8 +130,6 @@ cancellationRecordSchema.index({ requestedBy: 1 });
 cancellationRecordSchema.set('toJSON', {
   virtuals: true,
   transform: function(doc: any, ret: any) {
-    ret.id = ret._id;
-    delete ret._id;
     delete ret.__v;
     return ret;
   },
