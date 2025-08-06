@@ -1,154 +1,171 @@
-import mongoose, { Connection, ConnectOptions } from 'mongoose';
+import mongoose from 'mongoose';
 import { env } from './environment';
 
-// Database connection options
-const connectionOptions: ConnectOptions = {
+// MongoDB connection options
+const mongoOptions: mongoose.ConnectOptions = {
+  dbName: env.MONGODB_DB_NAME,
   maxPoolSize: 10, // Maximum number of connections in the pool
+  minPoolSize: 2,  // Minimum number of connections in the pool
+  maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
   serverSelectionTimeoutMS: 5000, // Timeout for server selection
   socketTimeoutMS: 45000, // Socket timeout
   bufferCommands: false, // Disable mongoose buffering
-  autoIndex: true, // Build indexes
-  autoCreate: true, // Create collections if they don't exist
+  retryWrites: true, // Enable retryable writes
+  retryReads: true, // Enable retryable reads
 };
 
-// Database connection state
-let dbConnection: Connection | null = null;
-let isConnecting = false;
-let connectionPromise: Promise<Connection> | null = null;
+// Database connection class
+class DatabaseConnection {
+  private static instance: DatabaseConnection;
+  private isConnected = false;
+  private connectionPromise: Promise<typeof mongoose> | null = null;
 
-// Connection event handlers
-const setupConnectionHandlers = (connection: Connection): void => {
-  connection.on('connected', () => {
-    console.log('✅ MongoDB connected successfully');
-  });
-
-  connection.on('error', (error) => {
-    console.error('❌ MongoDB connection error:', error);
-  });
-
-  connection.on('disconnected', () => {
-    console.log('⚠️ MongoDB disconnected');
-  });
-
-  connection.on('reconnected', () => {
-    console.log('🔄 MongoDB reconnected');
-  });
-
-  connection.on('close', () => {
-    console.log('🔒 MongoDB connection closed');
-  });
-};
-
-// Connect to MongoDB
-export const connectToDatabase = async (): Promise<Connection> => {
-  // Return existing connection if available
-  if (dbConnection && dbConnection.readyState === 1) {
-    return dbConnection;
+  private constructor() {
+    this.setupEventHandlers();
   }
 
-  // Return existing promise if connecting
-  if (connectionPromise) {
-    return connectionPromise;
+  public static getInstance(): DatabaseConnection {
+    if (!DatabaseConnection.instance) {
+      DatabaseConnection.instance = new DatabaseConnection();
+    }
+    return DatabaseConnection.instance;
   }
 
-  // Prevent multiple simultaneous connection attempts
-  if (isConnecting) {
-    throw new Error('Database connection already in progress');
+  // Setup MongoDB connection event handlers
+  private setupEventHandlers(): void {
+    mongoose.connection.on('connected', () => {
+      console.log('✅ MongoDB connected successfully');
+      this.isConnected = true;
+    });
+
+    mongoose.connection.on('error', (error) => {
+      console.error('❌ MongoDB connection error:', error);
+      this.isConnected = false;
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      console.log('⚠️ MongoDB disconnected');
+      this.isConnected = false;
+    });
+
+    mongoose.connection.on('reconnected', () => {
+      console.log('🔄 MongoDB reconnected');
+      this.isConnected = true;
+    });
+
+    // Handle application termination
+    process.on('SIGINT', this.gracefulShutdown.bind(this));
+    process.on('SIGTERM', this.gracefulShutdown.bind(this));
   }
 
-  isConnecting = true;
+  // Connect to MongoDB
+  public async connect(): Promise<typeof mongoose> {
+    if (this.isConnected) {
+      console.log('📊 MongoDB already connected');
+      return mongoose;
+    }
 
-  try {
+    if (this.connectionPromise) {
+      console.log('⏳ MongoDB connection in progress, waiting...');
+      return this.connectionPromise;
+    }
+
     console.log('🔌 Connecting to MongoDB...');
-    
-    connectionPromise = mongoose.connect(env.MONGODB_URI, connectionOptions);
-    const connection = await connectionPromise;
-    
-    dbConnection = connection;
-    setupConnectionHandlers(connection);
-    
-    console.log(`📊 Connected to MongoDB database: ${env.MONGODB_DB_NAME}`);
-    
-    return connection;
-  } catch (error) {
-    console.error('❌ Failed to connect to MongoDB:', error);
-    throw error;
-  } finally {
-    isConnecting = false;
-    connectionPromise = null;
-  }
-};
+    console.log(`📍 URI: ${env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')}`);
+    console.log(`🗄️ Database: ${env.MONGODB_DB_NAME}`);
 
-// Get database connection
-export const getDatabaseConnection = (): Connection | null => {
-  return dbConnection;
-};
-
-// Check if database is connected
-export const isDatabaseConnected = (): boolean => {
-  return dbConnection?.readyState === 1;
-};
-
-// Graceful shutdown
-export const disconnectDatabase = async (): Promise<void> => {
-  if (dbConnection) {
     try {
-      console.log('🔄 Disconnecting from MongoDB...');
-      await mongoose.disconnect();
-      dbConnection = null;
+      this.connectionPromise = mongoose.connect(env.MONGODB_URI, mongoOptions);
+      await this.connectionPromise;
+      return mongoose;
+    } catch (error) {
+      console.error('❌ Failed to connect to MongoDB:', error);
+      this.connectionPromise = null;
+      throw error;
+    }
+  }
+
+  // Disconnect from MongoDB
+  public async disconnect(): Promise<void> {
+    if (!this.isConnected) {
+      console.log('📊 MongoDB already disconnected');
+      return;
+    }
+
+    console.log('🔌 Disconnecting from MongoDB...');
+    try {
+      await mongoose.connection.close();
+      this.isConnected = false;
+      this.connectionPromise = null;
       console.log('✅ MongoDB disconnected successfully');
     } catch (error) {
       console.error('❌ Error disconnecting from MongoDB:', error);
       throw error;
     }
   }
-};
 
-// Health check for database
-export const checkDatabaseHealth = async (): Promise<'healthy' | 'unhealthy'> => {
-  try {
-    if (!isDatabaseConnected()) {
-      return 'unhealthy';
+  // Graceful shutdown
+  private async gracefulShutdown(): Promise<void> {
+    console.log('🛑 Received shutdown signal, closing MongoDB connection...');
+    try {
+      await this.disconnect();
+      console.log('✅ Graceful shutdown completed');
+      process.exit(0);
+    } catch (error) {
+      console.error('❌ Error during graceful shutdown:', error);
+      process.exit(1);
     }
-
-    // Ping the database
-    await mongoose.connection.db.admin().ping();
-    return 'healthy';
-  } catch (error) {
-    console.error('Database health check failed:', error);
-    return 'unhealthy';
   }
-};
 
-// Initialize database connection
-export const initializeDatabase = async (): Promise<void> => {
-  try {
-    await connectToDatabase();
-  } catch (error) {
-    console.error('Failed to initialize database:', error);
-    process.exit(1);
+  // Check if database is connected
+  public isDatabaseConnected(): boolean {
+    return this.isConnected && mongoose.connection.readyState === 1;
   }
-};
 
-// Export database instance for use throughout the application
-export const db = {
-  connection: getDatabaseConnection,
-  isConnected: isDatabaseConnected,
-  health: checkDatabaseHealth,
-  connect: connectToDatabase,
-  disconnect: disconnectDatabase,
-  initialize: initializeDatabase,
-};
+  // Get connection status
+  public getConnectionStatus(): {
+    connected: boolean;
+    readyState: number;
+    host: string;
+    name: string;
+  } {
+    return {
+      connected: this.isConnected,
+      readyState: mongoose.connection.readyState,
+      host: mongoose.connection.host || 'unknown',
+      name: mongoose.connection.name || 'unknown',
+    };
+  }
 
-// Handle process termination
-process.on('SIGINT', async () => {
-  console.log('\n🛑 Received SIGINT, shutting down gracefully...');
-  await disconnectDatabase();
-  process.exit(0);
-});
+  // Health check for database
+  public async healthCheck(): Promise<{ status: 'healthy' | 'unhealthy'; details: string }> {
+    try {
+      if (!this.isDatabaseConnected()) {
+        return { status: 'unhealthy', details: 'Database not connected' };
+      }
 
-process.on('SIGTERM', async () => {
-  console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
-  await disconnectDatabase();
-  process.exit(0);
-});
+      // Ping the database
+      const db = mongoose.connection.db;
+      if (!db) {
+        return { status: 'unhealthy', details: 'Database instance not available' };
+      }
+      
+      await db.admin().ping();
+      return { status: 'healthy', details: 'Database connection is healthy' };
+    } catch (error) {
+      return { 
+        status: 'unhealthy', 
+        details: `Database health check failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      };
+    }
+  }
+}
+
+// Export singleton instance
+export const db = DatabaseConnection.getInstance();
+
+// Export mongoose for direct access if needed
+export { mongoose };
+
+// Export connection status type
+export type DatabaseStatus = ReturnType<typeof db.getConnectionStatus>;
