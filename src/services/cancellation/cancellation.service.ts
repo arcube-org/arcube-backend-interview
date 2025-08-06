@@ -11,18 +11,22 @@ import { CancellationRepository } from '../../repositories/cancellation.reposito
 import { OrderRepository } from '../../repositories/order.repository';
 import { OrderLookupService } from '../order-lookup.service';
 import { ProductModel, OrderModel } from '../../models';
+import { EventBusService } from '../event-bus.service';
+import { CancellationEvent, CancellationEventType } from '../../types/webhook.types';
 
 export class CancellationService {
   private commandInvoker: CancellationCommandInvoker;
   private cancellationRepository: CancellationRepository;
   private orderRepository: OrderRepository;
   private orderLookupService: OrderLookupService;
+  private eventBus: EventBusService;
 
   constructor() {
     this.commandInvoker = new CancellationCommandInvoker();
     this.cancellationRepository = new CancellationRepository();
     this.orderRepository = new OrderRepository();
     this.orderLookupService = new OrderLookupService();
+    this.eventBus = EventBusService.getInstance();
   }
 
   /**
@@ -32,12 +36,14 @@ export class CancellationService {
     payload: CancelOrderRequest,
     authContext: AuthContext
   ): Promise<CancellationResult | CancellationResult[]> {
+    const correlationId = uuidv4();
+    
     try {
       // 1. Lookup order and validate access
       const lookupResult = await this.orderLookupService.lookupOrder(payload, authContext);
       
       if (!lookupResult.canAccess) {
-        return {
+        const result: CancellationResult = {
           success: false,
           refundAmount: 0,
           cancellationFee: 0,
@@ -46,10 +52,25 @@ export class CancellationService {
           message: lookupResult.accessReason || 'Access denied',
           errorCode: 'ACCESS_DENIED'
         };
+
+        // Publish cancellation failed event
+        await this.publishCancellationEvent(
+          CancellationEventType.CANCELLATION_FAILED,
+          {
+            orderId: payload.orderIdentifier.pnr,
+            productId: payload.productId,
+            reason: payload.reason,
+            errorCode: 'ACCESS_DENIED',
+            errorMessage: result.message
+          },
+          correlationId
+        );
+
+        return result;
       }
 
       if (!lookupResult.order) {
-        return {
+        const result: CancellationResult = {
           success: false,
           refundAmount: 0,
           cancellationFee: 0,
@@ -58,12 +79,27 @@ export class CancellationService {
           message: 'Order not found',
           errorCode: 'ORDER_NOT_FOUND'
         };
+
+        // Publish cancellation failed event
+        await this.publishCancellationEvent(
+          CancellationEventType.CANCELLATION_FAILED,
+          {
+            orderId: payload.orderIdentifier.pnr,
+            productId: payload.productId,
+            reason: payload.reason,
+            errorCode: 'ORDER_NOT_FOUND',
+            errorMessage: result.message
+          },
+          correlationId
+        );
+
+        return result;
       }
 
       // 2. Validate order status
       const orderStatusValidation = this.orderLookupService.validateOrderStatus(lookupResult.order);
       if (!orderStatusValidation.canCancel) {
-        return {
+        const result: CancellationResult = {
           success: false,
           refundAmount: 0,
           cancellationFee: 0,
@@ -72,19 +108,61 @@ export class CancellationService {
           message: orderStatusValidation.reason || 'Order cannot be cancelled',
           errorCode: 'ORDER_STATUS_INVALID'
         };
+
+        // Publish cancellation failed event
+        await this.publishCancellationEvent(
+          CancellationEventType.CANCELLATION_FAILED,
+          {
+            orderId: lookupResult.order.id,
+            productId: payload.productId,
+            reason: payload.reason,
+            errorCode: 'ORDER_STATUS_INVALID',
+            errorMessage: result.message
+          },
+          correlationId
+        );
+
+        return result;
       }
 
-      // 3. Determine cancellation type (single product vs entire order)
+      // 3. Publish cancellation started event
+      await this.publishCancellationEvent(
+        CancellationEventType.CANCELLATION_STARTED,
+        {
+          orderId: lookupResult.order.id,
+          productId: payload.productId,
+          reason: payload.reason,
+          requestedBy: payload.requestedBy,
+          requestSource: payload.requestSource
+        },
+        correlationId
+      );
+
+      // 4. Determine cancellation type (single product vs entire order)
       if (payload.productId) {
         // Single product cancellation
-        return await this.cancelSingleProduct(payload, lookupResult, authContext);
+        return await this.cancelSingleProduct(payload, lookupResult, authContext, correlationId);
       } else {
         // Entire order cancellation
-        return await this.cancelEntireOrder(payload, lookupResult, authContext);
+        return await this.cancelEntireOrder(payload, lookupResult, authContext, correlationId);
       }
 
     } catch (error) {
       console.error('Enhanced cancellation service error:', error);
+      
+      // Publish cancellation failed event
+      await this.publishCancellationEvent(
+        CancellationEventType.CANCELLATION_FAILED,
+        {
+          orderId: payload.orderIdentifier.pnr,
+          productId: payload.productId,
+          reason: payload.reason,
+          errorCode: 'INTERNAL_ERROR',
+          errorMessage: error instanceof Error ? error.message : 'Unknown error'
+        },
+        correlationId
+      );
+
       return this.handleServiceError(error);
     }
   }
@@ -95,12 +173,13 @@ export class CancellationService {
   private async cancelSingleProduct(
     payload: CancelOrderRequest,
     lookupResult: any,
-    authContext: AuthContext
+    authContext: AuthContext,
+    correlationId: string
   ): Promise<CancellationResult> {
     const { order, product } = lookupResult;
 
     if (!product) {
-      return {
+      const result: CancellationResult = {
         success: false,
         refundAmount: 0,
         cancellationFee: 0,
@@ -109,12 +188,27 @@ export class CancellationService {
         message: 'Product not found in order',
         errorCode: 'PRODUCT_NOT_FOUND'
       };
+
+      // Publish cancellation failed event
+      await this.publishCancellationEvent(
+        CancellationEventType.CANCELLATION_FAILED,
+        {
+          orderId: order.id,
+          productId: payload.productId,
+          reason: payload.reason,
+          errorCode: 'PRODUCT_NOT_FOUND',
+          errorMessage: result.message
+        },
+        correlationId
+      );
+
+      return result;
     }
 
     // Validate product status
     const productStatusValidation = this.orderLookupService.validateProductStatus(product);
     if (!productStatusValidation.canCancel) {
-      return {
+      const result: CancellationResult = {
         success: false,
         refundAmount: 0,
         cancellationFee: 0,
@@ -123,38 +217,55 @@ export class CancellationService {
         message: productStatusValidation.reason || 'Product cannot be cancelled',
         errorCode: 'PRODUCT_STATUS_INVALID'
       };
+
+      // Publish cancellation failed event
+      await this.publishCancellationEvent(
+        CancellationEventType.CANCELLATION_FAILED,
+        {
+          orderId: order.id,
+          productId: payload.productId,
+          reason: payload.reason,
+          errorCode: 'PRODUCT_STATUS_INVALID',
+          errorMessage: result.message
+        },
+        correlationId
+      );
+
+      return result;
     }
 
-    // Create enhanced cancellation context
+    // Create cancellation context
     const context: EnhancedCancellationContext = {
       orderId: order.id,
-      productId: product.id,
+      productId: payload.productId || product.id, // Use product.id as fallback
       reason: payload.reason || 'No reason provided',
       requestedBy: payload.requestedBy.userId,
       requestSource: payload.requestSource,
-      correlationId: uuidv4(),
+      correlationId: correlationId,
       authContext
     };
 
     // Execute cancellation
-    return await this.executeCancellation(context, product);
+    return await this.executeCancellation(context, product, correlationId);
   }
 
   /**
-   * Cancel entire order (all products)
+   * Cancel entire order
    */
   private async cancelEntireOrder(
     payload: CancelOrderRequest,
     lookupResult: any,
-    authContext: AuthContext
+    authContext: AuthContext,
+    correlationId: string
   ): Promise<CancellationResult[]> {
     const { order } = lookupResult;
+    const results: CancellationResult[] = [];
 
     // Get all products in the order
     const products = await this.orderLookupService.getOrderProducts(order.id);
     
     if (products.length === 0) {
-      return [{
+      const result: CancellationResult = {
         success: false,
         refundAmount: 0,
         cancellationFee: 0,
@@ -162,55 +273,98 @@ export class CancellationService {
         status: 'failed',
         message: 'No products found in order',
         errorCode: 'NO_PRODUCTS_FOUND'
-      }];
+      };
+
+      // Publish cancellation failed event
+      await this.publishCancellationEvent(
+        CancellationEventType.CANCELLATION_FAILED,
+        {
+          orderId: order.id,
+          productId: payload.productId,
+          reason: payload.reason,
+          errorCode: 'NO_PRODUCTS_FOUND',
+          errorMessage: result.message
+        },
+        correlationId
+      );
+
+      return [result];
     }
 
-    const results: CancellationResult[] = [];
-
-    // Cancel each product in the order
+    // Cancel each product individually
     for (const product of products) {
       try {
         // Validate product status
         const productStatusValidation = this.orderLookupService.validateProductStatus(product);
         if (!productStatusValidation.canCancel) {
-          results.push({
+          const result: CancellationResult = {
             success: false,
             refundAmount: 0,
             cancellationFee: 0,
-            currency: product.price?.currency || 'USD',
+            currency: 'USD',
             status: 'failed',
             message: productStatusValidation.reason || 'Product cannot be cancelled',
             errorCode: 'PRODUCT_STATUS_INVALID'
-          });
+          };
+
+          // Publish cancellation failed event
+          await this.publishCancellationEvent(
+            CancellationEventType.CANCELLATION_FAILED,
+            {
+              orderId: order.id,
+              productId: product.id,
+              reason: payload.reason,
+              errorCode: 'PRODUCT_STATUS_INVALID',
+              errorMessage: result.message
+            },
+            correlationId
+          );
+
+          results.push(result);
           continue;
         }
 
-        // Create enhanced cancellation context
+        // Create cancellation context for this product
         const context: EnhancedCancellationContext = {
           orderId: order.id,
           productId: product.id,
           reason: payload.reason || 'No reason provided',
           requestedBy: payload.requestedBy.userId,
           requestSource: payload.requestSource,
-          correlationId: uuidv4(),
+          correlationId: correlationId,
           authContext
         };
 
         // Execute cancellation for this product
-        const result = await this.executeCancellation(context, product);
+        const result = await this.executeCancellation(context, product, correlationId);
         results.push(result);
 
       } catch (error) {
         console.error(`Failed to cancel product ${product.id}:`, error);
-        results.push({
+        const result: CancellationResult = {
           success: false,
           refundAmount: 0,
           cancellationFee: 0,
-          currency: product.price?.currency || 'USD',
+          currency: 'USD',
           status: 'failed',
           message: `Failed to cancel product: ${error instanceof Error ? error.message : 'Unknown error'}`,
           errorCode: 'PRODUCT_CANCELLATION_FAILED'
-        });
+        };
+
+        // Publish cancellation failed event
+        await this.publishCancellationEvent(
+          CancellationEventType.CANCELLATION_FAILED,
+          {
+            orderId: order.id,
+            productId: product.id,
+            reason: payload.reason,
+            errorCode: 'PRODUCT_CANCELLATION_FAILED',
+            errorMessage: result.message
+          },
+          correlationId
+        );
+
+        results.push(result);
       }
     }
 
@@ -218,58 +372,117 @@ export class CancellationService {
   }
 
   /**
-   * Execute cancellation for a single product
+   * Execute cancellation using command pattern
    */
   private async executeCancellation(
     context: EnhancedCancellationContext,
-    product: any
+    product: any,
+    correlationId: string
   ): Promise<CancellationResult> {
     // 1. Create cancellation record
-    const cancellationRecord = await this.cancellationRepository.createCancellationRequest({
+    const cancellationRecord = await this.cancellationRepository.create({
       orderId: context.orderId,
-      productId: context.productId!,
+      productId: context.productId || product.id, // Ensure productId is always defined
       reason: context.reason,
-      requestSource: context.requestSource === 'customer_app' ? 'customer' : 
-                    context.requestSource === 'admin_panel' ? 'admin' : 'system',
       requestedBy: context.requestedBy,
-      refundAmount: 0, // Will be updated after command execution
-      cancellationFee: 0, // Will be updated after command execution
-      currency: product.price.currency,
       status: 'pending',
-      correlationId: context.correlationId,
-      cancelledAt: new Date()
-    });
-
-    // 2. Create and execute command
-    const command = CancellationCommandFactory.createCommand(product.provider, {
-      orderId: context.orderId,
-      productId: context.productId!,
-      reason: context.reason,
-      requestedBy: context.requestedBy,
-      requestSource: context.requestSource === 'customer_app' ? 'customer' : 
-                    context.requestSource === 'admin_panel' ? 'admin' : 'system',
       correlationId: context.correlationId
     });
 
-    const result = await this.commandInvoker.executeCommand(command);
+    try {
+      // 2. Create and execute cancellation command
+      const command = CancellationCommandFactory.createCommand(product.provider, {
+        orderId: context.orderId,
+        productId: context.productId || product.id,
+        reason: context.reason,
+        requestedBy: context.requestedBy,
+        requestSource: context.requestSource === 'customer_app' ? 'customer' : 
+                      context.requestSource === 'admin_panel' ? 'admin' : 'system',
+        correlationId: context.correlationId
+      });
 
-    // 3. Update cancellation record with result
-    await this.cancellationRepository.updateCancellationStatus(
-      cancellationRecord.id,
-      result.success ? 'completed' : 'failed',
-      {
-        provider: product.provider,
-        response: result.externalResponse,
-        timestamp: new Date()
-      }
-    );
+      const result = await this.commandInvoker.executeCommand(command);
 
-    // 4. Update product and order status if successful
-    if (result.success) {
+      // 3. Update cancellation record with result
+      await this.cancellationRepository.updateCancellationStatus(
+        cancellationRecord.id,
+        result.success ? 'completed' : 'failed',
+        result.message
+      );
+
+      // 4. Update product and order status
       await this.updateProductAndOrderStatus(context.orderId, product, result);
-    }
 
-    return result;
+      // 5. Publish appropriate event based on result
+      if (result.success) {
+        if (result.status === 'partial') {
+          await this.publishCancellationEvent(
+            CancellationEventType.CANCELLATION_PARTIAL,
+            {
+              orderId: context.orderId,
+              productId: context.productId,
+              reason: context.reason,
+              refundAmount: result.refundAmount,
+              cancellationFee: result.cancellationFee,
+              currency: result.currency
+            },
+            correlationId
+          );
+        } else {
+          await this.publishCancellationEvent(
+            CancellationEventType.CANCELLATION_COMPLETED,
+            {
+              orderId: context.orderId,
+              productId: context.productId,
+              reason: context.reason,
+              refundAmount: result.refundAmount,
+              cancellationFee: result.cancellationFee,
+              currency: result.currency
+            },
+            correlationId
+          );
+        }
+      } else {
+        await this.publishCancellationEvent(
+          CancellationEventType.CANCELLATION_FAILED,
+          {
+            orderId: context.orderId,
+            productId: context.productId,
+            reason: context.reason,
+            errorCode: result.errorCode,
+            errorMessage: result.message
+          },
+          correlationId
+        );
+      }
+
+      return result;
+
+    } catch (error) {
+      console.error('Cancellation execution error:', error);
+      
+      // Update cancellation record with error
+      await this.cancellationRepository.updateCancellationStatus(
+        cancellationRecord.id,
+        'failed',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+
+      // Publish cancellation failed event
+      await this.publishCancellationEvent(
+        CancellationEventType.CANCELLATION_FAILED,
+        {
+          orderId: context.orderId,
+          productId: context.productId,
+          reason: context.reason,
+          errorCode: 'EXECUTION_ERROR',
+          errorMessage: error instanceof Error ? error.message : 'Unknown error'
+        },
+        correlationId
+      );
+
+      return this.handleServiceError(error);
+    }
   }
 
   /**
@@ -347,5 +560,25 @@ export class CancellationService {
       errorCode: 'SERVICE_ERROR',
       externalResponse: { error: errorMessage }
     };
+  }
+
+  /**
+   * Publish cancellation events
+   */
+  private async publishCancellationEvent(
+    eventType: CancellationEventType,
+    eventData: any,
+    correlationId: string
+  ): Promise<void> {
+    const event: CancellationEvent = {
+      type: eventType,
+      data: eventData,
+      timestamp: new Date(),
+      correlationId,
+      orderId: eventData.orderId,
+      productId: eventData.productId
+    };
+    
+    await this.eventBus.publish(event);
   }
 } 

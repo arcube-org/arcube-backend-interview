@@ -13,7 +13,8 @@
     "test:coverage": "jest --coverage",
     "test:models": "jest src/tests/models.test.ts",
     "test:seed": "jest src/tests/seed.test.ts",
-    "seed": "ts-node src/scripts/seed.ts"
+    "seed": "ts-node src/scripts/seed.ts",
+    "webhook": "ts-node src/utils/webhook-cli.ts"
   },
   "repository": {
     "type": "git",
@@ -30,6 +31,7 @@
     "@sendgrid/mail": "^8.1.5",
     "@types/uuid": "^10.0.0",
     "bcryptjs": "^3.0.2",
+    "commander": "^12.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
