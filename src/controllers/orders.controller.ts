@@ -3,8 +3,11 @@ import { CancellationService } from '../services/cancellation/cancellation.servi
 import { CancelOrderRequest } from '../types/cancellation.types';
 import { ApiResponse } from '../types';
 import { CancelOrderRequestSchema } from '../validations/cancel-order.validation';
+import { OrderService } from '../services/order.service';
+import { GetOrdersQuerySchema } from '../validations/order.validation';
 
 const cancellationService = new CancellationService();
+const orderService = new OrderService();
 
 export const cancelOrder = async (
   req: Request<{}, ApiResponse<any>, any>,
@@ -87,6 +90,128 @@ export const getCancellationAuditTrailByCorrelationId = async (
     res.json({ 
       success: true, 
       data: auditTrail 
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * Get user's orders with optional filtering and pagination
+ */
+export const getOrders = async (
+  req: Request<{}, ApiResponse<any>, any>,
+  res: Response<ApiResponse<any>>,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // Validate query parameters
+    const validationResult = GetOrdersQuerySchema.safeParse(req.query);
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map((err: any) => ({
+        field: err.path.join('.'),
+        message: err.message
+      }));
+      
+      res.status(400).json({
+        success: false,
+        error: 'Invalid query parameters',
+        data: { validationErrors: errors }
+      });
+      return;
+    }
+
+    const query = validationResult.data;
+    const authContext = req.authContext;
+
+    if (!authContext) {
+      res.status(401).json({ 
+        success: false, 
+        error: 'Authentication required' 
+      });
+      return;
+    }
+
+    // Get orders based on user role and query parameters
+    const orders = await orderService.getUserOrders(authContext, query);
+    const totalCount = await orderService.getOrdersCount(authContext, query);
+    
+    // Calculate pagination info
+    const totalPages = Math.ceil(totalCount / query.limit);
+    
+    res.json({ 
+      success: true, 
+      data: {
+        orders,
+        pagination: {
+          page: query.page,
+          limit: query.limit,
+          total: totalCount,
+          totalPages
+        }
+      }
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * Get user's orders with their associated products
+ */
+export const getOrdersWithProducts = async (
+  req: Request<{}, ApiResponse<any>, any>,
+  res: Response<ApiResponse<any>>,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // Validate query parameters
+    const validationResult = GetOrdersQuerySchema.safeParse(req.query);
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map((err: any) => ({
+        field: err.path.join('.'),
+        message: err.message
+      }));
+      
+      res.status(400).json({
+        success: false,
+        error: 'Invalid query parameters',
+        data: { validationErrors: errors }
+      });
+      return;
+    }
+    
+    const query = validationResult.data;
+    const authContext = req.authContext;
+
+    if (!authContext) {
+      res.status(401).json({ 
+        success: false, 
+        error: 'Authentication required' 
+      });
+      return;
+    }
+
+    // Get orders with products based on user role and query parameters
+    const ordersWithProducts = await orderService.getOrdersWithProducts(authContext, query);
+    const totalCount = await orderService.getOrdersCount(authContext, query);
+    
+    // Calculate pagination info
+    const totalPages = Math.ceil(totalCount / query.limit);
+    
+    res.json({ 
+      success: true, 
+      data: {
+        orders: ordersWithProducts,
+        pagination: {
+          page: query.page,
+          limit: query.limit,
+          total: totalCount,
+          totalPages
+        }
+      }
     });
   } catch (e) {
     next(e);
