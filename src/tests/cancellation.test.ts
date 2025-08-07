@@ -57,6 +57,9 @@ describe('Enhanced Cancellation System', () => {
     await testUser.save();
 
     testProduct = new ProductModel({
+      id: 'PROD-TEST-001',
+      externalId: 'PROD-TEST-001',
+      orderId: 'temp-order-id', // Will be updated after order creation
       title: 'Premium Lounge Access',
       provider: 'dragonpass',
       type: 'lounge_access',
@@ -82,7 +85,6 @@ describe('Enhanced Cancellation System', () => {
         loungeName: 'Centurion Lounge',
       },
     });
-    await testProduct.save();
 
     testOrder = new OrderModel({
       pnr: 'TEST-PNR-001',
@@ -93,7 +95,7 @@ describe('Enhanced Cancellation System', () => {
         lastName: 'Doe',
         phone: '+1234567890',
       },
-      products: [testProduct.id],
+      products: [], // Will be updated after product creation
       segments: [
         {
           segmentId: 'SEG-001',
@@ -111,6 +113,14 @@ describe('Enhanced Cancellation System', () => {
       totalAmount: 50.00,
       totalCurrency: 'USD',
     });
+    await testOrder.save();
+
+    // Update product with correct orderId and save
+    testProduct.orderId = testOrder.id;
+    await testProduct.save();
+
+    // Update order with product ID
+    testOrder.products = [testProduct.id];
     await testOrder.save();
 
     cancellationService = new CancellationService();

@@ -46,6 +46,8 @@ describe('Cancellation Undo Functionality', () => {
       // Create a test product
       const testProduct = new ProductModel({
         id: 'test-product-456',
+        externalId: 'test-product-456',
+        orderId: 'test-order-456',
         title: 'Test Product',
         provider: 'dragonpass',
         type: 'lounge_access',
@@ -94,7 +96,7 @@ describe('Cancellation Undo Functionality', () => {
       expect(updatedRecord?.status).toBe('undone');
 
       // Clean up
-      await ProductModel.deleteOne({ id: 'test-product-456' });
+      await ProductModel.deleteMany({ id: 'test-product-456' });
       await cancellationRepository.deleteById(cancellationRecord.id);
     });
 
@@ -102,6 +104,8 @@ describe('Cancellation Undo Functionality', () => {
       // Create a test product
       const testProduct = new ProductModel({
         id: 'test-product-789',
+        externalId: 'test-product-789',
+        orderId: 'test-order-789',
         title: 'Test Product',
         provider: 'dragonpass',
         type: 'lounge_access',
@@ -145,7 +149,7 @@ describe('Cancellation Undo Functionality', () => {
       expect(cancellationRecord.originalProductStatus).toBe('confirmed');
 
       // Clean up
-      await ProductModel.deleteOne({ id: 'test-product-789' });
+      await ProductModel.deleteMany({ id: 'test-product-789' });
       await cancellationRepository.deleteById(cancellationRecord.id);
     });
   });

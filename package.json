@@ -11,7 +11,6 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:models": "jest src/tests/models.test.ts",
     "test:cancellation": "jest src/tests/cancellation.test.ts",
     "test:webhook": "jest src/tests/webhook.test.ts",
     "test:zod-validation": "jest src/tests/zod-validation.test.ts",
