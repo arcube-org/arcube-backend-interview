@@ -19,6 +19,8 @@
     "test:security": "jest src/tests/security.test.ts",
     "test:health": "jest src/tests/health.test.ts",
     "test:seed": "jest src/tests/seed.test.ts",
+    "test:email": "jest src/tests/email.test.ts",
+    "test:email:send": "ts-node src/scripts/test-email.ts",
     "seed": "ts-node src/scripts/seed.ts",
     "webhook": "ts-node src/utils/webhook-cli.ts"
   },
