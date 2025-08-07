@@ -24,4 +24,12 @@ module.exports = {
   resetMocks: true,
   restoreMocks: true,
   maxWorkers: 1, // Run tests sequentially to avoid database conflicts
+  
+  // Setup test environment
+  setupFilesAfterEnv: ['<rootDir>/src/config/test-setup.ts'],
+  
+  // Set test environment variables
+  testEnvironmentOptions: {
+    NODE_ENV: 'test',
+  },
 }; 

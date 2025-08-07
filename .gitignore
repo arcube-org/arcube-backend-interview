@@ -6,3 +6,9 @@ dist/
 
 .cursor/
 docs/
+
+.env.test
+.env.test-debug
+.env
+.env.development
+.env.production

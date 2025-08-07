@@ -1,8 +1,55 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import path from 'path';
 
-// Load environment variables from .env file
-dotenv.config();
+// Load environment variables based on NODE_ENV
+const nodeEnv = process.env.NODE_ENV || 'development';
+
+if (nodeEnv === 'test') {
+  // Load test environment variables from .env.test if it exists, otherwise use defaults
+  const testEnvPath = path.resolve(process.cwd(), '.env.test');
+  try {
+    dotenv.config({ path: testEnvPath });
+  } catch (error) {
+    // If .env.test doesn't exist, set default test values
+    console.warn('⚠️  .env.test file not found, using default test environment variables');
+    
+    // Set default test environment variables
+    const defaultTestEnv = {
+      NODE_ENV: 'test',
+      PORT: '8081',
+      HOST: 'localhost',
+      MONGODB_URI: 'mongodb://localhost:27017/arcube-dragonpass-test',
+      MONGODB_DB_NAME: 'arcube-dragonpass-test',
+      JWT_SECRET: 'test-jwt-secret-key-that-is-at-least-32-characters-long-for-testing',
+      JWT_EXPIRES_IN: '1h',
+      TOKEN_SECRET: 'test-token-secret-key-that-is-at-least-32-characters-long-for-testing',
+      TOKEN_EXPIRES_IN: '1d',
+      MOCK_DRAGONPASS_SERVICE_URL: 'http://localhost:3002',
+      MOCK_DRAGONPASS_API_TIMEOUT: '5000',
+      MOCK_SERVICE_API_KEY: 'test-mock-service-api-key',
+      SENDGRID_API_KEY: 'test-sendgrid-api-key',
+      SENDGRID_FROM_EMAIL: 'test@arcube.com',
+      SENDGRID_FROM_NAME: 'Arcube Test',
+      LOG_LEVEL: 'error',
+      LOG_FORMAT: 'simple',
+      RATE_LIMIT_WINDOW_MS: '60000',
+      RATE_LIMIT_MAX_REQUESTS: '1000',
+      CORS_ORIGIN: '*',
+      HEALTH_CHECK_TIMEOUT: '2000',
+    };
+    
+    // Set default values for any missing environment variables
+    Object.entries(defaultTestEnv).forEach(([key, value]) => {
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    });
+  }
+} else {
+  // Load environment variables from .env file for development and production
+  dotenv.config();
+}
 
 // Environment schema with validation rules
 const envSchema = z.object({

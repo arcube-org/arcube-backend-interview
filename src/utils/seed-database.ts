@@ -40,6 +40,15 @@ const defaultUsers: SeedUser[] = [
     nationality: 'India',
   },
   {
+    name: 'Vijay Games',
+    email: 'gamebyvijay@gmail.com',
+    password: 'User@123456',
+    role: 'user',
+    isActive: true,
+    dateOfBirth: new Date('1990-05-20'),
+    nationality: 'United Kingdom',
+  },
+  {
     name: 'System Service',
     email: 'system@arcube.com',
     password: 'System@123456',
