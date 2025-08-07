@@ -57,7 +57,7 @@ class DefaultCancellationCommand extends CancellationCommand {
   }
 
   async undo(): Promise<void> {
-    console.log(`Undoing default cancellation for order: ${this.context.orderId}`);
+    await this.defaultUndo();
   }
 
   getAuditInfo(): any {

@@ -11,8 +11,9 @@ export interface CancellationRecordDocument extends Document {
   refundAmount: number;
   cancellationFee: number;
   currency: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'completed' | 'failed' | 'undone';
   correlationId: string;
+  originalProductStatus?: string; // Track original status for undo operations
   externalProviderResponse?: {
     provider: string;
     response: unknown;
@@ -92,12 +93,16 @@ const cancellationRecordSchema = new Schema<CancellationRecordDocument>(
     },
     status: {
       type: String,
-      enum: ['pending', 'completed', 'failed'],
+      enum: ['pending', 'completed', 'failed', 'undone'],
       default: 'pending',
     },
     correlationId: {
       type: String,
       required: [true, 'Correlation ID is required'],
+      trim: true,
+    },
+    originalProductStatus: {
+      type: String,
       trim: true,
     },
     externalProviderResponse: externalProviderResponseSchema,

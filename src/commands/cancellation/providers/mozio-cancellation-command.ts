@@ -29,7 +29,7 @@ export class MozioCancellationCommand extends CancellationCommand {
   }
 
   async undo(): Promise<void> {
-    console.log(`Undoing Mozio cancellation for order: ${this.context.orderId}`);
+    await this.defaultUndo();
   }
 
   getAuditInfo(): AuditInfo {

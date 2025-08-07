@@ -4,6 +4,7 @@ export enum CancellationEventType {
   CANCELLATION_COMPLETED = 'cancellation.completed',
   CANCELLATION_FAILED = 'cancellation.failed',
   CANCELLATION_PARTIAL = 'cancellation.partial',
+  CANCELLATION_UNDO = 'cancellation.undo',
   REFUND_PROCESSED = 'refund.processed',
   AUDIT_TRAIL_UPDATED = 'audit.updated'
 }

@@ -21,6 +21,7 @@
     "test:seed": "jest src/tests/seed.test.ts",
     "test:email": "jest src/tests/email.test.ts",
     "test:email:send": "ts-node src/scripts/test-email.ts",
+    "test:cancellation-undo": "jest src/tests/cancellation-undo.test.ts",
     "seed": "ts-node src/scripts/seed.ts",
     "webhook": "ts-node src/utils/webhook-cli.ts"
   },

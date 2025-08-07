@@ -29,7 +29,7 @@ export class AiraloCancellationCommand extends CancellationCommand {
   }
 
   async undo(): Promise<void> {
-    console.log(`Undoing Airalo cancellation for order: ${this.context.orderId}`);
+    await this.defaultUndo();
   }
 
   getAuditInfo(): AuditInfo {

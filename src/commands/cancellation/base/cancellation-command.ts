@@ -20,6 +20,36 @@ export abstract class CancellationCommand {
   abstract undo(): Promise<void>;
 
   /**
+   * Default undo implementation that can be called by subclasses
+   */
+  protected async defaultUndo(): Promise<void> {
+    try {
+      console.log(`Default undo operation for ${this.getCommandType()} - Order: ${this.context.orderId}, Product: ${this.context.productId}`);
+      
+      // Log the undo operation for audit purposes
+      console.log(`Undo operation logged for:
+        - Command Type: ${this.getCommandType()}
+        - Provider: ${this.getProvider()}
+        - Order ID: ${this.context.orderId}
+        - Product ID: ${this.context.productId}
+        - Requested By: ${this.context.requestedBy}
+        - Correlation ID: ${this.context.correlationId}
+        - Timestamp: ${new Date().toISOString()}
+      `);
+
+      // In a real implementation, 
+      // 1. Call vendor-specific reactivation APIs
+      // 2. Update internal records
+      // 3. Send notifications
+      // 4. Log the undo operation for audit purposes
+      
+    } catch (error) {
+      console.error(`Failed to perform default undo for ${this.getCommandType()}:`, error);
+      // Don't throw here as this is a cleanup operation
+    }
+  }
+
+  /**
    * Get audit information about the command execution
    */
   abstract getAuditInfo(): AuditInfo;

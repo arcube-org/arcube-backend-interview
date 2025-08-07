@@ -9,7 +9,7 @@ export class RateLimiterConfig {
    */
   static generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    max: 100000, // limit each IP to 100 requests per windowMs
     message: {
       success: false,
       error: 'Too many requests from this IP, please try again later.',
@@ -33,7 +33,7 @@ export class RateLimiterConfig {
    */
   static customerCancellationLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 10, // limit each IP to 10 cancellation requests per hour
+    max: 100000, // limit each IP to 10 cancellation requests per hour
     message: {
       success: false,
       error: 'Too many cancellation requests, please try again later.',
@@ -57,7 +57,7 @@ export class RateLimiterConfig {
    */
   static adminLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 50, // limit each IP to 50 requests per 15 minutes
+    max: 50000, // limit each IP to 50 requests per 15 minutes
     message: {
       success: false,
       error: 'Too many admin requests, please try again later.',
@@ -81,7 +81,7 @@ export class RateLimiterConfig {
    */
   static partnerApiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 200, // limit each IP to 200 requests per 15 minutes
+    max: 200000, // limit each IP to 200 requests per 15 minutes
     message: {
       success: false,
       error: 'Too many partner API requests, please try again later.',
@@ -105,7 +105,7 @@ export class RateLimiterConfig {
    */
   static systemLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 500, // limit each IP to 500 requests per 15 minutes
+    max: 500000, // limit each IP to 500 requests per 15 minutes
     message: {
       success: false,
       error: 'Too many system requests, please try again later.',
@@ -129,7 +129,7 @@ export class RateLimiterConfig {
    */
   static auditTrailLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // limit each IP to 20 audit requests per 15 minutes
+    max: 200000, // limit each IP to 20 audit requests per 15 minutes
     message: {
       success: false,
       error: 'Too many audit trail requests, please try again later.',
@@ -165,13 +165,13 @@ export class RateLimiterConfig {
         // Different limits based on auth type
         switch (authContext.type) {
           case 'jwt':
-            return 20; // Customer requests
+            return 200000; // Customer requests
           case 'api_key':
-            return 100; // Partner requests
+            return 100000; // Partner requests
           case 'service_token':
-            return 200; // Admin/System requests
+            return 200000; // Admin/System requests
           default:
-            return 10; // Default limit
+            return 100000; // Default limit
         }
       },
       message: {

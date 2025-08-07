@@ -36,9 +36,36 @@ export class DragonPassCancellationCommand extends CancellationCommand {
   }
 
   async undo(): Promise<void> {
-    // For DragonPass, we would typically call a reactivation API
-    // For now, we'll just log the undo operation
-    console.log(`Undoing DragonPass cancellation for order: ${this.context.orderId}`);
+    try {
+      console.log(`Undoing DragonPass cancellation for order: ${this.context.orderId}, product: ${this.context.productId}`);
+      
+      if (!this.product) {
+        console.warn('Product not loaded, cannot perform undo operation');
+        return;
+      }
+
+      // For DragonPass, we would typically call a reactivation API
+      // Since there's no API for undo operation, we just log the undo operation
+      // The actual status reversion is handled by the cancellation service
+      
+      console.log(`DragonPass undo operation logged for:
+        - Order ID: ${this.context.orderId}
+        - Product ID: ${this.context.productId}
+        - Provider: ${this.product.provider}
+        - Original Status: ${this.product.status}
+        - Correlation ID: ${this.context.correlationId}
+      `);
+
+      // In a real implementation, you might:
+      // 1. Call DragonPass reactivation API if available
+      // 2. Update internal records
+      // 3. Send notifications
+      // 4. Log the undo operation for audit purposes
+      
+    } catch (error) {
+      console.error(`Failed to undo DragonPass cancellation for order ${this.context.orderId}:`, error);
+      // Don't throw here as this is a cleanup operation
+    }
   }
 
   getAuditInfo(): AuditInfo {

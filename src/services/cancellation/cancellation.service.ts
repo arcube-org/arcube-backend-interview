@@ -379,14 +379,15 @@ export class CancellationService {
     product: any,
     correlationId: string
   ): Promise<CancellationResult> {
-    // 1. Create cancellation record
+    // 1. Create cancellation record with original product status
     const cancellationRecord = await this.cancellationRepository.create({
       orderId: context.orderId,
       productId: context.productId || product.id, // Ensure productId is always defined
       reason: context.reason,
       requestedBy: context.requestedBy,
       status: 'pending',
-      correlationId: context.correlationId
+      correlationId: context.correlationId,
+      originalProductStatus: product.status // Track original status for undo
     });
 
     try {
@@ -410,8 +411,13 @@ export class CancellationService {
         result.message
       );
 
-      // 4. Update product and order status
-      await this.updateProductAndOrderStatus(context.orderId, product, result);
+      // 4. Update product and order status only if successful
+      if (result.success) {
+        await this.updateProductAndOrderStatus(context.orderId, product, result);
+      } else {
+        // If cancellation failed, revert product status to original
+        await this.undoProductStatus(context.orderId, product, cancellationRecord.originalProductStatus || 'confirmed');
+      }
 
       // 5. Publish appropriate event based on result
       if (result.success) {
@@ -467,6 +473,9 @@ export class CancellationService {
         'failed',
         error instanceof Error ? error.message : 'Unknown error'
       );
+
+      // Revert product status to original on error
+      await this.undoProductStatus(context.orderId, product, cancellationRecord.originalProductStatus || 'confirmed');
 
       // Publish cancellation failed event
       await this.publishCancellationEvent(
@@ -524,6 +533,43 @@ export class CancellationService {
   }
 
   /**
+   * Undo product status to its original state
+   */
+  private async undoProductStatus(
+    orderId: string,
+    product: any,
+    originalStatus: string
+  ): Promise<void> {
+    try {
+      console.log(`Undoing product status for product ${product.id} from current status to ${originalStatus}`);
+      
+      await ProductModel.findOneAndUpdate(
+        { id: product.id },
+        { 
+          status: originalStatus,
+          updatedAt: new Date()
+        }
+      );
+
+      // Publish undo event
+      await this.publishCancellationEvent(
+        CancellationEventType.CANCELLATION_UNDO,
+        {
+          orderId: orderId,
+          productId: product.id,
+          originalStatus: originalStatus,
+          message: `Product status reverted to ${originalStatus} due to cancellation failure`
+        },
+        'undo-' + Date.now()
+      );
+
+    } catch (error) {
+      console.error(`Failed to undo product status for product ${product.id}:`, error);
+      // Don't throw here as this is a cleanup operation
+    }
+  }
+
+  /**
    * Get cancellation audit trail
    */
   getAuditTrail() {
@@ -542,6 +588,59 @@ export class CancellationService {
    */
   async retryFailedCancellations(): Promise<CancellationResult[]> {
     return await this.commandInvoker.retryFailedCommands();
+  }
+
+  /**
+   * Manually undo a failed cancellation by correlation ID
+   */
+  async undoCancellation(correlationId: string): Promise<boolean> {
+    try {
+      // Find the cancellation record
+      const cancellationRecord = await this.cancellationRepository.findByCorrelationId(correlationId);
+      
+      if (!cancellationRecord) {
+        console.error(`Cancellation record not found for correlation ID: ${correlationId}`);
+        return false;
+      }
+
+      if (cancellationRecord.status !== 'failed') {
+        console.warn(`Cancellation is not in failed status: ${cancellationRecord.status}`);
+        return false;
+      }
+
+      // Get the product
+      const product = await ProductModel.findOne({ id: cancellationRecord.productId });
+      if (!product) {
+        console.error(`Product not found: ${cancellationRecord.productId}`);
+        return false;
+      }
+
+      // Revert product status to original
+      if (cancellationRecord.originalProductStatus) {
+        await this.undoProductStatus(
+          cancellationRecord.orderId,
+          product,
+          cancellationRecord.originalProductStatus
+        );
+
+        // Update cancellation record status
+        await this.cancellationRepository.updateCancellationStatus(
+          cancellationRecord.id,
+          'undone',
+          'Cancellation manually undone'
+        );
+
+        console.log(`Successfully undone cancellation for correlation ID: ${correlationId}`);
+        return true;
+      } else {
+        console.error(`No original product status found for correlation ID: ${correlationId}`);
+        return false;
+      }
+
+    } catch (error) {
+      console.error(`Failed to undo cancellation for correlation ID ${correlationId}:`, error);
+      return false;
+    }
   }
 
   /**
