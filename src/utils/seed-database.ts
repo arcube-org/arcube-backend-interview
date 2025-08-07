@@ -7,6 +7,8 @@ interface SeedUser {
   password: string;
   role: UserRole;
   isActive: boolean;
+  dateOfBirth?: Date;
+  nationality?: string;
 }
 
 const defaultUsers: SeedUser[] = [
@@ -16,6 +18,8 @@ const defaultUsers: SeedUser[] = [
     password: 'Admin@123456',
     role: 'admin',
     isActive: true,
+    dateOfBirth: new Date('1985-03-15'),
+    nationality: 'United States',
   },
   {
     name: 'Partner User',
@@ -23,6 +27,8 @@ const defaultUsers: SeedUser[] = [
     password: 'Partner@123456',
     role: 'partner',
     isActive: true,
+    dateOfBirth: new Date('1990-07-22'),
+    nationality: 'United Arab Emirates',
   },
   {
     name: 'Vijaykumar Prakash',
@@ -30,6 +36,8 @@ const defaultUsers: SeedUser[] = [
     password: 'User@123456',
     role: 'user',
     isActive: true,
+    dateOfBirth: new Date('1995-04-04'),
+    nationality: 'India',
   },
   {
     name: 'System Service',
@@ -37,6 +45,7 @@ const defaultUsers: SeedUser[] = [
     password: 'System@123456',
     role: 'system',
     isActive: true,
+    // No dateOfBirth or nationality for system role
   },
 ];
 

@@ -99,6 +99,8 @@ describe('Models', () => {
         password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
+        dateOfBirth: new Date('1992-05-20'),
+        nationality: 'Canada',
       };
 
       const user = new UserModel(userData);
@@ -110,6 +112,8 @@ describe('Models', () => {
       expect(savedUser.email).toBe(userData.email);
       expect(savedUser.role).toBe(userData.role);
       expect(savedUser.isActive).toBe(userData.isActive);
+      expect(savedUser.dateOfBirth).toEqual(userData.dateOfBirth);
+      expect(savedUser.nationality).toBe(userData.nationality);
       expect(savedUser.createdAt).toBeDefined();
       expect(savedUser.updatedAt).toBeDefined();
     });
@@ -121,6 +125,8 @@ describe('Models', () => {
         password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
+        dateOfBirth: new Date('1988-12-10'),
+        nationality: 'United Kingdom',
       };
 
       const user = new UserModel(userData);
@@ -148,6 +154,8 @@ describe('Models', () => {
         password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
+        dateOfBirth: new Date('1995-08-15'),
+        nationality: 'Australia',
       };
 
       const user1 = new UserModel(userData);
@@ -165,6 +173,8 @@ describe('Models', () => {
         password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
+        dateOfBirth: new Date('1990-03-25'),
+        nationality: 'Germany',
       };
 
       const user1 = new UserModel(userData);
@@ -263,6 +273,8 @@ describe('Models', () => {
         password: 'TestPassword123',
         role: 'user',
         isActive: true,
+        dateOfBirth: new Date('1993-07-12'),
+        nationality: 'France',
       });
       await testUser.save();
 
@@ -400,6 +412,8 @@ describe('Models', () => {
         password: 'TestPassword123',
         role: 'user',
         isActive: true,
+        dateOfBirth: new Date('1987-11-30'),
+        nationality: 'Japan',
       });
       await testUser.save();
 

@@ -99,6 +99,9 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
         email: user.email,
         role: user.role,
         isActive: user.isActive,
+        dateOfBirth: user.dateOfBirth,
+        nationality: user.nationality,
+        age: user.age, // Virtual field for calculated age
         permissions: authContext.permissions,
         requestSource: authContext.requestSource,
         createdAt: user.createdAt,

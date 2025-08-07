@@ -29,6 +29,8 @@ describe('TokenService', () => {
       email: 'partner@test.com',
       password: 'password123',
       role: 'partner',
+      dateOfBirth: new Date('1985-06-18'),
+      nationality: 'United States',
     });
     await partnerUser.save();
 
@@ -37,6 +39,7 @@ describe('TokenService', () => {
       email: 'system@test.com',
       password: 'password123',
       role: 'system',
+      // No dateOfBirth or nationality for system role
     });
     await systemUser.save();
 
@@ -45,6 +48,8 @@ describe('TokenService', () => {
       email: 'admin@test.com',
       password: 'password123',
       role: 'admin',
+      dateOfBirth: new Date('1980-09-22'),
+      nationality: 'United Kingdom',
     });
     await adminUser.save();
   });

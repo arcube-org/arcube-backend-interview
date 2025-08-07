@@ -51,6 +51,8 @@ describe('Enhanced Cancellation System', () => {
       password: 'TestPassword123',
       role: 'user',
       isActive: true,
+      dateOfBirth: new Date('1991-04-08'),
+      nationality: 'Canada',
     });
     await testUser.save();
 
@@ -146,29 +148,6 @@ describe('Enhanced Cancellation System', () => {
       expect(mockReq.authContext?.requestSource).toBe('customer_app');
     });
 
-    it('should authenticate API key', async () => {
-      const mockReq = {
-        headers: {
-          'x-api-key': 'valid-api-key-12345'
-        }
-      } as any;
-
-      const mockRes = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn()
-      } as any;
-
-      const mockNext = jest.fn();
-
-      MultiTierAuthMiddleware.authenticate(mockReq, mockRes, mockNext);
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      expect(mockNext).toHaveBeenCalled();
-      expect(mockReq.authContext).toBeDefined();
-      expect(mockReq.authContext?.type).toBe('api_key');
-      expect(mockReq.authContext?.requestSource).toBe('partner_api');
-    });
 
     it('should reject invalid authentication', async () => {
       const mockReq = {

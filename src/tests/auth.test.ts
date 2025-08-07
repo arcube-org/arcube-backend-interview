@@ -41,6 +41,8 @@ describe('Authentication System', () => {
         password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
+        dateOfBirth: new Date('1996-07-25'),
+        nationality: 'France',
       };
 
       const user = new UserModel(userData);
@@ -83,6 +85,8 @@ describe('Authentication System', () => {
         password: plainPassword,
         role: 'user' as const,
         isActive: true,
+        dateOfBirth: new Date('1989-12-03'),
+        nationality: 'Germany',
       };
 
       const user = new UserModel(userData);
@@ -102,6 +106,8 @@ describe('Authentication System', () => {
         password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
+        dateOfBirth: new Date('1994-02-14'),
+        nationality: 'Australia',
       };
 
       const user = new UserModel(userData);
@@ -123,6 +129,8 @@ describe('Authentication System', () => {
           password: 'AdminPass123',
           role: 'admin' as const,
           isActive: true,
+          dateOfBirth: new Date('1982-03-10'),
+          nationality: 'United States',
         },
         {
           name: 'Regular User',
@@ -130,6 +138,8 @@ describe('Authentication System', () => {
           password: 'UserPass123',
           role: 'user' as const,
           isActive: true,
+          dateOfBirth: new Date('1993-11-18'),
+          nationality: 'Canada',
         },
         {
           name: 'Inactive User',
@@ -137,6 +147,8 @@ describe('Authentication System', () => {
           password: 'InactivePass123',
           role: 'user' as const,
           isActive: false,
+          dateOfBirth: new Date('1990-05-22'),
+          nationality: 'United Kingdom',
         },
       ];
 
@@ -249,6 +261,8 @@ describe('Authentication System', () => {
         password: 'TestPass123',
         role: 'user',
         isActive: true,
+        dateOfBirth: new Date('1988-06-15'),
+        nationality: 'Italy',
       });
       await user.save();
 
@@ -309,6 +323,63 @@ describe('Authentication System', () => {
           errorCode: 'NO_AUTH_METHOD',
         })
       );
+    });
+  });
+
+  describe('Profile Endpoint', () => {
+    it('should return user profile with new fields', async () => {
+      const user = new UserModel({
+        name: 'Profile Test User',
+        email: 'profile-test@example.com',
+        password: 'TestPass123',
+        role: 'user',
+        isActive: true,
+        dateOfBirth: new Date('1995-03-20'),
+        nationality: 'Canada',
+      });
+      await user.save();
+
+      const credentials = {
+        email: 'profile-test@example.com',
+        password: 'TestPass123',
+      };
+      const authResult = await AuthService.authenticateUser(credentials);
+      expect(authResult.success).toBe(true);
+
+      const mockReq = {
+        authContext: authResult.authContext,
+      } as any;
+
+      const mockRes = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as any;
+
+      // Import the controller function
+      const { getProfile } = await import('../controllers/auth.controller');
+      await getProfile(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+          dateOfBirth: user.dateOfBirth,
+          nationality: user.nationality,
+          age: expect.any(Number), // Virtual field
+          permissions: expect.any(Array),
+          requestSource: expect.any(String),
+          createdAt: expect.any(Date),
+          updatedAt: expect.any(Date),
+        }),
+      });
+
+      // Clean up
+      await UserModel.deleteOne({ email: 'profile-test@example.com' });
     });
   });
 }); 

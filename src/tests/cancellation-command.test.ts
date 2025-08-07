@@ -43,6 +43,8 @@ describe('Cancellation Command Pattern', () => {
       password: 'TestPassword123',
       role: 'user',
       isActive: true,
+      dateOfBirth: new Date('1990-01-15'),
+      nationality: 'United States',
     });
     await testUser.save();
 

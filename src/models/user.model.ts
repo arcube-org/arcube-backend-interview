@@ -10,9 +10,12 @@ export interface UserDocument extends Document {
   password: string;
   role: 'admin' | 'partner' | 'user' | 'system';
   isActive: boolean;
+  dateOfBirth?: Date;
+  nationality?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
+  age?: number;
 }
 
 // User schema
@@ -53,6 +56,50 @@ const userSchema = new Schema<UserDocument>(
       type: Boolean,
       default: true,
     },
+    dateOfBirth: {
+      type: Date,
+      validate: {
+        validator: function(this: UserDocument, value: Date) {
+          // Only validate if role is not 'system'
+          if (this.role === 'system') return true;
+          
+          if (!value) return true; // Optional field
+          
+          // Check if date is in the past
+          if (value >= new Date()) {
+            return false;
+          }
+          
+          // Check if date is not too far in the past (e.g., not older than 150 years)
+          const minDate = new Date();
+          minDate.setFullYear(minDate.getFullYear() - 150);
+          if (value < minDate) {
+            return false;
+          }
+          
+          return true;
+        },
+        message: 'Date of birth must be a valid past date and not older than 150 years'
+      }
+    },
+    nationality: {
+      type: String,
+      trim: true,
+      maxlength: [100, 'Nationality cannot exceed 100 characters'],
+      validate: {
+        validator: function(this: UserDocument, value: string) {
+          // Only validate if role is not 'system'
+          if (this.role === 'system') return true;
+          
+          if (!value) return true; // Optional field
+          
+          // Basic validation - should contain only letters, spaces, and common punctuation
+          const nationalityRegex = /^[a-zA-Z\s\-'()]+$/;
+          return nationalityRegex.test(value);
+        },
+        message: 'Nationality should contain only letters, spaces, hyphens, apostrophes, and parentheses'
+      }
+    },
   },
   {
     timestamps: true, // Adds createdAt and updatedAt
@@ -65,6 +112,8 @@ userSchema.index({ id: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
+userSchema.index({ dateOfBirth: 1 });
+userSchema.index({ nationality: 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
@@ -89,6 +138,21 @@ userSchema.methods.comparePassword = async function(candidatePassword: string): 
 // Virtual for full name
 userSchema.virtual('fullName').get(function() {
   return `${this.name}`;
+});
+
+// Virtual for age calculation
+userSchema.virtual('age').get(function() {
+  if (!this.dateOfBirth) return null;
+  const today = new Date();
+  const birthDate = new Date(this.dateOfBirth);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  
+  return age;
 });
 
 // Ensure virtual fields are serialized

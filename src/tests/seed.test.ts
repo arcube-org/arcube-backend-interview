@@ -63,18 +63,26 @@ describe('Database Seeding', () => {
     expect(adminUser).toBeDefined();
     expect(adminUser?.email).toBe('admin@arcube.com');
     expect(adminUser?.name).toBe('System Administrator');
+    expect(adminUser?.dateOfBirth).toEqual(new Date('1985-03-15'));
+    expect(adminUser?.nationality).toBe('United States');
 
     expect(partnerUser).toBeDefined();
     expect(partnerUser?.email).toBe('partner@emirates.com');
     expect(partnerUser?.name).toBe('Partner User');
+    expect(partnerUser?.dateOfBirth).toEqual(new Date('1990-07-22'));
+    expect(partnerUser?.nationality).toBe('United Arab Emirates');
 
     expect(regularUser).toBeDefined();
     expect(regularUser?.email).toBe('vijaykumar4495@gmail.com');
     expect(regularUser?.name).toBe('Vijaykumar Prakash');
+    expect(regularUser?.dateOfBirth).toEqual(new Date('1995-04-04'));
+    expect(regularUser?.nationality).toBe('India');
 
     expect(systemUser).toBeDefined();
     expect(systemUser?.email).toBe('system@arcube.com');
     expect(systemUser?.name).toBe('System Service');
+    expect(systemUser?.dateOfBirth).toBeUndefined();
+    expect(systemUser?.nationality).toBeUndefined();
   });
 
   it('should not seed database when users already exist', async () => {
@@ -86,6 +94,8 @@ describe('Database Seeding', () => {
         password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
+        dateOfBirth: new Date('1992-01-15'),
+        nationality: 'Canada',
       },
       {
         name: 'Existing Test User 2',
@@ -93,6 +103,8 @@ describe('Database Seeding', () => {
         password: 'TestPassword123',
         role: 'admin' as const,
         isActive: true,
+        dateOfBirth: new Date('1988-11-30'),
+        nationality: 'United Kingdom',
       },
       {
         name: 'Existing Test User 3',
@@ -100,6 +112,8 @@ describe('Database Seeding', () => {
         password: 'TestPassword123',
         role: 'partner' as const,
         isActive: false,
+        dateOfBirth: new Date('1995-06-10'),
+        nationality: 'Australia',
       },
     ];
 
@@ -125,15 +139,21 @@ describe('Database Seeding', () => {
     expect(existingUser1).toBeDefined();
     expect(existingUser1?.name).toBe('Existing Test User 1');
     expect(existingUser1?.role).toBe('user');
+    expect(existingUser1?.dateOfBirth).toEqual(new Date('1992-01-15'));
+    expect(existingUser1?.nationality).toBe('Canada');
 
     expect(existingUser2).toBeDefined();
     expect(existingUser2?.name).toBe('Existing Test User 2');
     expect(existingUser2?.role).toBe('admin');
+    expect(existingUser2?.dateOfBirth).toEqual(new Date('1988-11-30'));
+    expect(existingUser2?.nationality).toBe('United Kingdom');
 
     expect(existingUser3).toBeDefined();
     expect(existingUser3?.name).toBe('Existing Test User 3');
     expect(existingUser3?.role).toBe('partner');
     expect(existingUser3?.isActive).toBe(false);
+    expect(existingUser3?.dateOfBirth).toEqual(new Date('1995-06-10'));
+    expect(existingUser3?.nationality).toBe('Australia');
   });
 
   it('should handle seeding errors gracefully', async () => {
@@ -152,6 +172,8 @@ describe('Database Seeding', () => {
         password: 'TestPassword123',
         role: 'admin' as const,
         isActive: true,
+        dateOfBirth: new Date('1980-05-20'),
+        nationality: 'Germany',
       },
       {
         name: 'Inactive Partner User',
@@ -159,6 +181,8 @@ describe('Database Seeding', () => {
         password: 'TestPassword123',
         role: 'partner' as const,
         isActive: false,
+        dateOfBirth: new Date('1993-12-08'),
+        nationality: 'France',
       },
       {
         name: 'Regular User',
@@ -166,6 +190,8 @@ describe('Database Seeding', () => {
         password: 'TestPassword123',
         role: 'user' as const,
         isActive: true,
+        dateOfBirth: new Date('1998-03-25'),
+        nationality: 'Japan',
       },
       {
         name: 'System Service Account',
@@ -173,6 +199,7 @@ describe('Database Seeding', () => {
         password: 'TestPassword123',
         role: 'system' as const,
         isActive: true,
+        // No dateOfBirth or nationality for system role
       },
     ];
 
@@ -197,17 +224,49 @@ describe('Database Seeding', () => {
     expect(activeAdmin).toBeDefined();
     expect(activeAdmin?.role).toBe('admin');
     expect(activeAdmin?.isActive).toBe(true);
+    expect(activeAdmin?.dateOfBirth).toEqual(new Date('1980-05-20'));
+    expect(activeAdmin?.nationality).toBe('Germany');
 
     expect(inactivePartner).toBeDefined();
     expect(inactivePartner?.role).toBe('partner');
     expect(inactivePartner?.isActive).toBe(false);
+    expect(inactivePartner?.dateOfBirth).toEqual(new Date('1993-12-08'));
+    expect(inactivePartner?.nationality).toBe('France');
 
     expect(regularUser).toBeDefined();
     expect(regularUser?.role).toBe('user');
     expect(regularUser?.isActive).toBe(true);
+    expect(regularUser?.dateOfBirth).toEqual(new Date('1998-03-25'));
+    expect(regularUser?.nationality).toBe('Japan');
 
     expect(systemService).toBeDefined();
     expect(systemService?.role).toBe('system');
     expect(systemService?.isActive).toBe(true);
+    expect(systemService?.dateOfBirth).toBeUndefined();
+    expect(systemService?.nationality).toBeUndefined();
+  });
+
+  it('should validate age calculation virtual field', async () => {
+    // Create a test user with date of birth
+    const testUser = new UserModel({
+      name: 'Age Test User',
+      email: 'age-test@example.com',
+      password: 'TestPassword123',
+      role: 'user',
+      isActive: true,
+      dateOfBirth: new Date('1990-01-01'),
+      nationality: 'Test Country',
+    });
+
+    await testUser.save();
+
+    // Fetch the user and check the age virtual field
+    const savedUser = await UserModel.findOne({ email: 'age-test@example.com' });
+    expect(savedUser).toBeDefined();
+    expect(savedUser?.age).toBeGreaterThan(0);
+    expect(savedUser?.age).toBeLessThan(150);
+
+    // Clean up
+    await UserModel.deleteOne({ email: 'age-test@example.com' });
   });
 }); 
