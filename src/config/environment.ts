@@ -20,7 +20,8 @@ const envSchema = z.object({
   // Authentication & Security
   JWT_SECRET: z.string().min(32, 'JWT secret must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('24h'),
-  API_KEY_SECRET: z.string().min(32, 'API key secret must be at least 32 characters'),
+  TOKEN_SECRET: z.string().min(32, 'Token secret must be at least 32 characters'),
+  TOKEN_EXPIRES_IN: z.string().default('365d'),
   
   // Mock DragonPass Service Configuration
   MOCK_DRAGONPASS_SERVICE_URL: z.string().url('Mock DragonPass service URL must be a valid URL'),

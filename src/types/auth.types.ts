@@ -41,6 +41,8 @@ export interface AuthContext {
     partnerName?: string;
     serviceName?: string;
     scope?: string[];
+    tokenName?: string;
+    tokenId?: string;
   };
 }
 

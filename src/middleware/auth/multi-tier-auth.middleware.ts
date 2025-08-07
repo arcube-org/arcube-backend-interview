@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthContext, AuthResult, REQUEST_SOURCE_MAP, ROLE_PERMISSIONS } from '../../types/auth.types';
 import { AuthService } from '../../services/auth.service';
+import { TokenService } from '../../services/token.service';
 
 // Extend Request interface to include auth context
 declare global {
@@ -58,12 +59,12 @@ export class MultiTierAuthMiddleware {
 
     // Check for API key
     if (apiKeyHeader) {
-      return MultiTierAuthMiddleware.validateApiKey(apiKeyHeader as string);
+      return await MultiTierAuthMiddleware.validateApiKey(apiKeyHeader as string);
     }
 
     // Check for service token
     if (serviceTokenHeader) {
-      return MultiTierAuthMiddleware.validateServiceToken(serviceTokenHeader as string);
+      return await MultiTierAuthMiddleware.validateServiceToken(serviceTokenHeader as string);
     }
 
     return {
@@ -90,12 +91,9 @@ export class MultiTierAuthMiddleware {
   }
 
   /**
-   * Validate API key (using constant values for now)
+   * Validate API key using TokenService
    */
-  private static validateApiKey(apiKey: string): AuthResult {
-    // For now, accept any API key and return a mock partner
-    // In real implementation, this would validate against a database of API keys
-    
+  private static async validateApiKey(apiKey: string): Promise<AuthResult> {
     if (!apiKey || apiKey.length < 10) {
       return {
         success: false,
@@ -104,37 +102,13 @@ export class MultiTierAuthMiddleware {
       };
     }
 
-    // Mock API key payload - in real implementation, this would be looked up from database
-    const mockApiKeyPayload = {
-      partnerId: 'partner-456',
-      partnerName: 'Test Partner',
-      permissions: ROLE_PERMISSIONS.partner,
-      apiKey: apiKey
-    };
-
-    const authContext: AuthContext = {
-      type: 'api_key',
-      partnerId: mockApiKeyPayload.partnerId,
-      permissions: [...mockApiKeyPayload.permissions],
-      requestSource: REQUEST_SOURCE_MAP.api_key,
-      metadata: {
-        partnerName: mockApiKeyPayload.partnerName
-      }
-    };
-
-    return {
-      success: true,
-      authContext
-    };
+    return await TokenService.validateToken(apiKey, 'api_key');
   }
 
   /**
-   * Validate service token (using constant values for now)
+   * Validate service token using TokenService
    */
-  private static validateServiceToken(token: string): AuthResult {
-    // For now, accept any service token and return a mock admin user
-    // In real implementation, this would validate against a secure token store
-    
+  private static async validateServiceToken(token: string): Promise<AuthResult> {
     if (!token || token.length < 10) {
       return {
         success: false,
@@ -143,30 +117,7 @@ export class MultiTierAuthMiddleware {
       };
     }
 
-    // Mock service token payload - in real implementation, this would be validated
-    const mockServiceTokenPayload = {
-      serviceId: 'admin-service-789',
-      serviceName: 'Admin Panel',
-      permissions: ROLE_PERMISSIONS.admin,
-      scope: ['admin_panel', 'system']
-    };
-
-    const authContext: AuthContext = {
-      type: 'service_token',
-      userId: mockServiceTokenPayload.serviceId,
-      userRole: 'admin',
-      permissions: [...mockServiceTokenPayload.permissions],
-      requestSource: REQUEST_SOURCE_MAP.service_token,
-      metadata: {
-        serviceName: mockServiceTokenPayload.serviceName,
-        scope: mockServiceTokenPayload.scope
-      }
-    };
-
-    return {
-      success: true,
-      authContext
-    };
+    return await TokenService.validateToken(token, 'service_token');
   }
 
   /**

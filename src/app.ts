@@ -7,6 +7,7 @@ import ordersRouter from "./routes/orders.route";
 import webhookRouter from "./routes/webhook.route";
 import healthRouter from "./routes/health.route";
 import authRouter from "./routes/auth.route";
+import tokenRouter from "./routes/token.route";
 import { seedDatabase, checkSeedStatus } from "./utils/seed-database";
 
 const app: Application = express();
@@ -50,6 +51,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Routes
 app.use("/auth", authRouter);
+app.use("/tokens", tokenRouter);
 app.use("/orders", ordersRouter);
 app.use("/webhooks", webhookRouter);
 app.use("/health", healthRouter);
