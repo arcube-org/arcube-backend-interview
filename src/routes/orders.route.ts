@@ -4,7 +4,8 @@ import {
   getCancellationAuditTrail, 
   getCancellationAuditTrailByCorrelationId,
   getOrders,
-  getOrdersWithProducts
+  getOrdersWithProducts,
+  getOrderWithProducts
 } from '../controllers/orders.controller';
 import { MultiTierAuthMiddleware } from '../middleware/auth/multi-tier-auth.middleware';
 import { RateLimiterMiddleware } from '../middleware/rate-limiter/rate-limiter.middleware';
@@ -24,6 +25,13 @@ router.get('/with-products',
   RateLimiterMiddleware.general,
   MultiTierAuthMiddleware.authenticate,
   getOrdersWithProducts
+);
+
+// Get single order with its products
+router.get('/:orderId/with-products', 
+  RateLimiterMiddleware.general,
+  MultiTierAuthMiddleware.authenticate,
+  getOrderWithProducts
 );
 
 // Single order cancellation endpoint with auth, rate limiting, and Zod validation in controller

@@ -3,7 +3,7 @@
 import { config } from 'dotenv';
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
-import { OrderModel, UserModel } from '../models';
+import { OrderModel, UserModel, ProductModel } from '../models';
 import { env } from '../config/environment';
 import { Order, OrderStatus, FlightSegment } from '../types';
 
@@ -278,7 +278,7 @@ const sampleProducts = [
         datetime: new Date(Date.now() + 9.5 * 60 * 60 * 1000)
       },
       vehicle: {
-        type: 'Sedan',
+        vehicleType: 'Sedan',
         capacity: 4,
         provider: 'Daytrip'
       },
@@ -337,7 +337,7 @@ const sampleProducts = [
         datetime: new Date(Date.now() + 13.5 * 60 * 60 * 1000)
       },
       vehicle: {
-        type: 'SUV',
+        vehicleType: 'SUV',
         capacity: 6,
         provider: 'Blacklane'
       },
@@ -737,8 +737,10 @@ const seedOrders = async (): Promise<void> => {
       return;
     }
 
-    // Create orders
+    // Create orders and their products
     const createdOrders = [];
+    const createdProducts = [];
+    
     for (const orderData of sampleOrders) {
       // Calculate total amount from products using the actual sample products
       const productDetails = orderData.products.map((productId: string) => 
@@ -772,9 +774,40 @@ const seedOrders = async (): Promise<void> => {
 
       const savedOrder = await order.save();
       createdOrders.push(savedOrder);
+
+      // Create product documents for this order
+      const orderProductIds: string[] = [];
+      for (const productId of orderData.products) {
+        const sampleProduct = sampleProducts.find(p => p.id === productId);
+        if (sampleProduct) {
+          const product = new ProductModel({
+            id: uuidv4(), // Generate new product ID
+            externalId: sampleProduct.id, // Keep original ID as externalId
+            orderId: savedOrder.id, // Link to the order
+            title: sampleProduct.title,
+            provider: sampleProduct.provider,
+            type: sampleProduct.type,
+            price: sampleProduct.price,
+            status: sampleProduct.status,
+            cancellationPolicy: sampleProduct.cancellationPolicy,
+            serviceDateTime: sampleProduct.serviceDateTime,
+            activationDeadline: sampleProduct.activationDeadline,
+            metadata: sampleProduct.metadata
+          });
+
+          const savedProduct = await product.save();
+          createdProducts.push(savedProduct);
+          orderProductIds.push(savedProduct.id); // Store the actual product ID
+        }
+      }
+
+      // Update the order with the actual product IDs
+      await OrderModel.findByIdAndUpdate(savedOrder._id, {
+        products: orderProductIds
+      });
     }
 
-    console.log(`✅ Successfully seeded database with ${createdOrders.length} orders:`);
+    console.log(`✅ Successfully seeded database with ${createdOrders.length} orders and ${createdProducts.length} products:`);
     
     // Group orders by user
     const ordersByUser = createdOrders.reduce((acc, order) => {
@@ -848,18 +881,45 @@ const seedOrders = async (): Promise<void> => {
 
 const clearOrders = async (): Promise<number> => {
   try {
-    const result = await OrderModel.deleteMany({});
-    console.log(`🗑️  Cleared ${result.deletedCount} order(s)`);
-    return result.deletedCount;
+    const orderResult = await OrderModel.deleteMany({});
+    const productResult = await ProductModel.deleteMany({});
+    console.log(`🗑️  Cleared ${orderResult.deletedCount} order(s) and ${productResult.deletedCount} product(s)`);
+    return orderResult.deletedCount;
   } catch (error) {
     console.error('❌ Error clearing orders:', error);
     throw error;
   }
 };
 
+const clearOrdersAndProducts = async (): Promise<void> => {
+  try {
+    console.log('🗑️  Starting database cleanup...');
+    console.log(`📡 Connecting to database: ${env.MONGODB_URI.replace(/\/\/.*@/, '//***:***@')}`);
+    
+    // Connect to database
+    await mongoose.connect(env.MONGODB_URI);
+    console.log('✅ Connected to database');
+    
+    // Clear orders and products
+    const orderResult = await OrderModel.deleteMany({});
+    const productResult = await ProductModel.deleteMany({});
+    
+    console.log(`✅ Successfully cleared ${orderResult.deletedCount} order(s) and ${productResult.deletedCount} product(s)`);
+    
+  } catch (error) {
+    console.error('❌ Cleanup failed:', error);
+    process.exit(1);
+  } finally {
+    // Close connection
+    await mongoose.connection.close();
+    console.log('🔌 Database connection closed');
+  }
+};
+
 const checkOrdersStatus = async (): Promise<void> => {
   try {
     const orderCount = await OrderModel.countDocuments();
+    const productCount = await ProductModel.countDocuments();
     const ordersByStatus = await OrderModel.aggregate([
       {
         $group: {
@@ -871,6 +931,7 @@ const checkOrdersStatus = async (): Promise<void> => {
 
     console.log(`\n📦 Orders Database Status:`);
     console.log(`Total Orders: ${orderCount}`);
+    console.log(`Total Products: ${productCount}`);
     
     if (ordersByStatus.length > 0) {
       console.log(`   Orders by Status:`);
@@ -894,6 +955,23 @@ const checkOrdersStatus = async (): Promise<void> => {
       console.log(`\n   Orders by User:`);
       ordersByUser.forEach(({ _id, count, totalAmount }) => {
         console.log(`     - ${_id}: ${count} orders, $${totalAmount?.toFixed(2) || '0.00'} USD`);
+      });
+    }
+
+    // Show products by provider
+    const productsByProvider = await ProductModel.aggregate([
+      {
+        $group: {
+          _id: '$provider',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    if (productsByProvider.length > 0) {
+      console.log(`\n   Products by Provider:`);
+      productsByProvider.forEach(({ _id, count }) => {
+        console.log(`     - ${_id}: ${count} products`);
       });
     }
 
@@ -934,4 +1012,4 @@ if (require.main === module) {
   runSeedOrders();
 }
 
-export { seedOrders, clearOrders, checkOrdersStatus }; 
+export { seedOrders, clearOrders, clearOrdersAndProducts, checkOrdersStatus }; 

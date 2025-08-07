@@ -5,6 +5,8 @@ import { Product, ProductType, ProductStatus, Price, CancellationPolicy, Cancell
 // Product document interface extending Mongoose Document
 export interface ProductDocument extends Document {
   id: string;
+  externalId: string; // This is the id from the vendor service
+  orderId: string; // This is the id of the order that this product belongs to
   title: string;
   provider: string;
   type: 'airport_transfer' | 'lounge_access' | 'esim' | 'meal' | 'insurance' | 'transport';
@@ -101,7 +103,7 @@ const metadataSchema = new Schema({
     datetime: Date,
   },
   vehicle: {
-    type: String,
+    vehicleType: String,
     capacity: Number,
     provider: String,
   },
@@ -131,6 +133,16 @@ const productSchema = new Schema<ProductDocument>(
       type: String,
       required: [true, 'Product ID is required'],
       default: () => uuidv4(),
+      trim: true,
+    },
+    externalId: {
+      type: String,
+      required: [true, 'External ID is required'],
+      trim: true,
+    },
+    orderId: {
+      type: String,
+      required: [true, 'Order ID is required'],
       trim: true,
     },
     title: {

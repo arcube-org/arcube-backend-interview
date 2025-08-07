@@ -217,3 +217,35 @@ export const getOrdersWithProducts = async (
     next(e);
   }
 };
+
+/**
+ * Get a single order with its associated products
+ */
+export const getOrderWithProducts = async (
+  req: Request<{ orderId: string }, ApiResponse<any>, any>,
+  res: Response<ApiResponse<any>>,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { orderId } = req.params;
+    const authContext = req.authContext;
+
+    if (!authContext) {
+      res.status(401).json({ 
+        success: false, 
+        error: 'Authentication required' 
+      });
+      return;
+    }
+
+    // Get single order with products
+    const orderWithProducts = await orderService.getOrderWithProducts(orderId, authContext);
+    
+    res.json({ 
+      success: true, 
+      data: orderWithProducts
+    });
+  } catch (e) {
+    next(e);
+  }
+};

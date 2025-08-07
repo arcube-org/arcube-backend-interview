@@ -211,4 +211,43 @@ export class OrderService {
       throw new Error(`Failed to get orders count: ${error}`);
     }
   }
+
+  /**
+   * Get a single order with its associated products
+   */
+  async getOrderWithProducts(orderId: string, authContext: AuthContext): Promise<OrderWithProducts> {
+    try {
+      // First, get the order and verify access
+      const order = await this.orderRepository.findById(orderId);
+      
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
+      // Check if user has access to this order based on role
+      if (authContext.userRole === 'admin' || authContext.userRole === 'system') {
+        // Admin and system can access any order
+      } else if (authContext.userRole === 'partner') {
+        // Partner can only access their own orders
+        if (authContext.userId && order.userId !== authContext.userId) {
+          throw new Error('Access denied');
+        }
+      } else {
+        // User role - can only access their own orders
+        if (authContext.metadata?.email && order.customer.email !== authContext.metadata.email) {
+          throw new Error('Access denied');
+        }
+      }
+
+      // Get the products for this order
+      const products = await this.productRepository.findByIds(order.products);
+
+      return {
+        order,
+        products
+      };
+    } catch (error) {
+      throw new Error(`Failed to get order with products: ${error}`);
+    }
+  }
 } 
