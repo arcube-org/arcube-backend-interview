@@ -3,3 +3,12 @@ dist/
 *.log
 .env
 .DS_Store
+
+.cursor/
+docs/
+
+.env.test
+.env.test-debug
+.env
+.env.development
+.env.production
